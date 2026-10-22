@@ -2,8 +2,9 @@
 (() => {
   'use strict';
 
-  const PIXEL_ID = '1171289765222256';
-  const KEY = 'dialnytics_marketing_consent_v1';
+  const META_PIXEL_ID = '1171289765222256';
+  const GA4_ID = 'G-74DV3HV81W';
+  const KEY = 'dialnytics_marketing_consent_v2';
 
   const banner = document.getElementById('cookie-banner');
   const accept = document.getElementById('cookie-accept');
@@ -12,23 +13,47 @@
 
   if (!banner || !accept || !reject || !settings) return;
 
-  let pixelLoaded = false;
+  let trackingLoaded = false;
 
-  function loadPixel() {
-    if (pixelLoaded) return;
-    pixelLoaded = true;
+  function addScript(src) {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
 
+  function loadTracking() {
+    if (trackingLoaded) return;
+    trackingLoaded = true;
+
+    // Meta Pixel
     window.fbq = window.fbq || function () {
       (window.fbq.queue = window.fbq.queue || []).push(arguments);
     };
 
-    window.fbq('init', PIXEL_ID);
+    window.fbq('init', META_PIXEL_ID);
     window.fbq('track', 'PageView');
 
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    document.head.appendChild(script);
+    addScript(
+      'https://connect.facebook.net/en_US/fbevents.js'
+    );
+
+    // Google Analytics 4
+    window.dataLayer = window.dataLayer || [];
+
+    window.gtag = function () {
+      window.dataLayer.push(arguments);
+    };
+
+    window.gtag('js', new Date());
+    window.gtag('config', GA4_ID, {
+      send_page_view: true
+    });
+
+    addScript(
+      'https://www.googletagmanager.com/gtag/js?id=' +
+      encodeURIComponent(GA4_ID)
+    );
   }
 
   function readConsent() {
@@ -43,26 +68,31 @@
     try {
       localStorage.setItem(KEY, value);
     } catch {
-      // Consent remains effective for this page.
+      // Storage may be unavailable.
     }
   }
 
   function setConsent(value) {
+    const previouslyLoaded = trackingLoaded;
+
     saveConsent(value);
     banner.hidden = true;
 
     if (value === 'accepted') {
-      loadPixel();
-    } else {
-      // Stop future tracking calls on this page.
-      window.fbq = function () {};
-      // Reload to discard an already loaded Pixel.
-      if (pixelLoaded) location.reload();
+      loadTracking();
+    } else if (previouslyLoaded) {
+      // Remove active tracking by reloading the page.
+      location.reload();
     }
   }
 
-  accept.addEventListener('click', () => setConsent('accepted'));
-  reject.addEventListener('click', () => setConsent('rejected'));
+  accept.addEventListener('click', () => {
+    setConsent('accepted');
+  });
+
+  reject.addEventListener('click', () => {
+    setConsent('rejected');
+  });
 
   settings.addEventListener('click', () => {
     banner.hidden = false;
@@ -71,7 +101,7 @@
   const saved = readConsent();
 
   if (saved === 'accepted') {
-    loadPixel();
+    loadTracking();
   } else if (saved !== 'rejected') {
     banner.hidden = false;
   }
