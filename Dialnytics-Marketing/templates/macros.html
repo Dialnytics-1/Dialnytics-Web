@@ -18,7 +18,17 @@
 {% elif name == 'headset' %}<path d="M3 14v-3a9 9 0 0 1 18 0v7c0 3-4 3-7 3"/><rect x="2" y="10" width="4" height="8" rx="2"/><rect x="18" y="10" width="4" height="8" rx="2"/>
 {% else %}<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>{% endif %}</svg>
 {%- endmacro %}
-{% macro logo() -%}<a class="brand" href="/" aria-label="Dialnytics home"><img src="/static/img/mark.svg" width="36" height="36" alt=""><span>dialnytics<span class="brand-dot">.</span></span></a>{%- endmacro %}
+{% macro logo() -%}
+<a class="brand" href="/" aria-label="Dialnytics home">
+    <img
+        src="/static/img/dialnytics-logo.png?v=2"
+        alt="Dialnytics"
+        class="brand-logo"
+        width="210"
+        height="60"
+    >
+</a>
+{%- endmacro %}
 {% macro cta() -%}<section class="section"><div class="container"><div class="closing-cta"><div><span class="eyebrow light">YOUR NEXT CONVERSATION STARTS HERE</span><h2>A better workflow.<br>A clearer monthly price.</h2><p>Choose a plan or take a 15-minute guided look around.</p></div><div class="cta-stack"><a class="button white" href="/pricing/">Find your plan {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><small>No free trial. No setup fee.</small></div></div></div></section>{%- endmacro %}
 {% macro feature_cards(features) -%}<div class="feature-grid">{% for slug,title,desc in features %}<a class="feature-card" href="/product/{{ slug }}/"><span class="feature-symbol">{{ icon(['phone','globe','users','bolt','chart','headset','record'][loop.index0]) }}</span><h3>{{ title }}</h3><p>{{ desc }}</p><span class="text-link">Explore {{ icon('arrow') }}</span></a>{% endfor %}</div>{%- endmacro %}
 {% macro faq_block(faq) -%}<div class="faq-list">{% for question,answer in faq %}<details><summary>{{ question }}<span aria-hidden="true">+</span></summary><p>{{ answer }}</p></details>{% endfor %}</div>{%- endmacro %}
