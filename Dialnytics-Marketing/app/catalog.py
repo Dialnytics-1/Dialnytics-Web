@@ -20,7 +20,7 @@ FEATURES = [
     ('call-recording', 'Call Recording', 'Record calls when you have the required permission. Included in every plan.'),
 ]
 PLANS = {
-    'usa-canada': {'name': 'USA & Canada', 'short': 'US / CA', 'region': 'North America', 'price': 22, 'from_price': 15, 'description': 'One workspace for conversations across the USA and Canada.', 'code': '+1', 'flag': 'US', 'tone': 'purple'},
+    'usa-canada': {'name': 'USA & Canada', 'short': 'US / CA', 'region': 'North America', 'price': 22, 'from_price': 18, 'description': 'One workspace for conversations across the USA and Canada.', 'code': '+1', 'flag': 'US', 'tone': 'purple'},
     'uk': {'name': 'United Kingdom', 'short': 'UK', 'region': 'United Kingdom', 'price': 29, 'from_price': 29, 'description': 'A dedicated presence for your UK conversations.', 'code': '+44', 'flag': 'GB', 'tone': 'blue'},
     'australia': {'name': 'Australia', 'short': 'AU', 'region': 'Asia Pacific', 'price': 44, 'from_price': 44, 'description': 'Bring Australian customer conversations into your browser.', 'code': '+61', 'flag': 'AU', 'tone': 'teal'},
     'japan': {'name': 'Japan', 'short': 'JP', 'region': 'Asia Pacific', 'price': 64, 'from_price': 64, 'description': 'A focused calling plan for teams working with Japan.', 'code': '+81', 'flag': 'JP', 'tone': 'red'},
