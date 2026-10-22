@@ -138,18 +138,20 @@ def create_app(settings=None):
             'camera=(), microphone=(), geolocation=()'
         )
         
-response.headers['Content-Security-Policy'] = (
-    "default-src 'self'; "
-    "script-src 'self' https://connect.facebook.net; "
-    "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: https://www.facebook.com; "
-    "font-src 'self'; "
-    "connect-src 'self' https://www.facebook.com https://connect.facebook.net; "
-    "form-action 'self'; "
-    "frame-ancestors 'none'; "
-    "base-uri 'self'; "
-    "object-src 'none'"
-)
+
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' https://connect.facebook.net; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https://www.facebook.com; "
+            "font-src 'self'; "
+            "connect-src 'self' https://www.facebook.com https://connect.facebook.net; "
+            "form-action 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "object-src 'none'"
+        )
+
 
 
         if request.url.path.startswith(('/admin', '/api')):
