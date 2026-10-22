@@ -108,25 +108,56 @@ def create_app(settings=None):
     app.add_middleware(BodyLimit)
     app.mount('/static',StaticFiles(directory=str(ROOT/'static')),name='static')
 
-    @app.middleware('http')
-    async def security_headers(request,call_next):
-        if request.method in ('POST','PUT','PATCH','DELETE'):
-            origin=request.headers.get('origin')
-            expected={urlparse(settings.base_url).netloc}
-            if not settings.production: expected.add(request.url.netloc)
-            if origin and urlparse(origin).netloc not in expected:
-                return JSONResponse({'detail':'Cross-origin request refused.'},status_code=403)
-        response=await call_next(request)
-        response.headers['X-Content-Type-Options']='nosniff'
-        response.headers['X-Frame-Options']='DENY'
-        response.headers['Referrer-Policy']='strict-origin-when-cross-origin'
-        response.headers['Permissions-Policy']='camera=(), microphone=(), geolocation=()'
-        response.headers['Content-Security-Policy']="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
-        if request.url.path.startswith(('/admin','/api')):
-            response.headers['Cache-Control']='no-store'
-            response.headers['X-Robots-Tag']='noindex, nofollow'
-        if settings.production: response.headers['Strict-Transport-Security']='max-age=31536000'
-        return response
+   @app.middleware('http')
+async def security_headers(request, call_next):
+    if request.method in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        origin = request.headers.get('origin')
+
+        allowed_origins = {
+            'https://dialnytics.uk',
+            'https://www.dialnytics.uk',
+            'https://dialnytics.com',
+            'https://www.dialnytics.com',
+        }
+
+        if not settings.production:
+            allowed_origins.add(str(request.base_url).rstrip('/'))
+
+        if origin and origin.rstrip('/') not in allowed_origins:
+            return JSONResponse(
+                {'detail': 'Cross-origin request refused.'},
+                status_code=403
+            )
+
+    response = await call_next(request)
+
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = (
+        'camera=(), microphone=(), geolocation=()'
+    )
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "object-src 'none'"
+    )
+
+    if request.url.path.startswith(('/admin', '/api')):
+        response.headers['Cache-Control'] = 'no-store'
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow'
+
+    if settings.production:
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000'
+
+    return response
 
     @app.exception_handler(SQLAlchemyError)
     async def database_error(request, exc):
