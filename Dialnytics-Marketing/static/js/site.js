@@ -48,3 +48,34 @@
     });
   });
 })();
+/* Dialnytics scroll reveal */
+(() => {
+  if (!('IntersectionObserver' in window)) return;
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  const elements = document.querySelectorAll(
+    '.section-heading, .feature-card, .plan-card, ' +
+    '.price-teaser, .country-card, .collection-card, ' +
+    '.workflow-points > div, .closing-cta'
+  );
+
+  const observer = new IntersectionObserver((entries, obs) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        obs.unobserve(entry.target);
+      }
+    });
+  }, {
+    threshold: 0.08,
+    rootMargin: '0px 0px -20px 0px'
+  });
+
+  elements.forEach(element => {
+    element.classList.add('scroll-reveal');
+    observer.observe(element);
+  });
+})();
