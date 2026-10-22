@@ -1,1 +1,0 @@
-{"name":"dialnytics-marketing","private":true,"type":"module","scripts":{"test:pricing":"node tests/pricing.mjs"}}
