@@ -235,3 +235,16 @@ textarea:focus {
     scroll-behavior: auto !important;
   }
 }
+/* Scroll reveal animations */
+@media (prefers-reduced-motion: no-preference) {
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity .65s ease, transform .65s ease;
+  }
+
+  .scroll-reveal.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
