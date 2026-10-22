@@ -49,7 +49,7 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None) -> di
     elif plan in ('europe', 'custom'):
         total = None
     elif plan == 'usa-canada':
-        total = Decimal(22 if seats == 1 else 38 if seats == 2 else 15 * seats)
+        total = Decimal(22 if seats == 1 else 40 if seats == 2 else 18 * seats)
     else:
         total = Decimal(PLANS[plan]['price']) * seats
     return {'plan': plan, 'plan_name': PLANS[plan]['name'], 'users': seats,
