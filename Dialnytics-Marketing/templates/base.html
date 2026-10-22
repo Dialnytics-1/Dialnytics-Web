@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#111329">
 <title>{{ page_title }} | Dialnytics</title><meta name="description" content="{{ description }}"><link rel="canonical" href="{{ canonical }}">
 <meta property="og:title" content="{{ page_title }} | Dialnytics"><meta property="og:description" content="{{ description }}"><meta property="og:type" content="website"><meta property="og:url" content="{{ canonical }}"><meta property="og:image" content="{{ base_url }}/static/img/social-card.png">
-<link rel="icon" href="/static/img/dialnytics-favlogo.png?v=2" type="image/png"><link rel="stylesheet" href="/static/css/site.css?v=2"><meta name="csrf-token" content="{{ csrf }}">
+<link rel="icon" href="/static/img/dialnytics-favlogo.png?v=2" type="image/png"><link rel="stylesheet" href="/static/css/site.css?v=1"><meta name="csrf-token" content="{{ csrf }}">
 <script src="/static/js/site.js" defer></script>{% block head %}{% endblock %
 </head><body><a class="skip-link" href="#main">Skip to content</a>
 <div class="announcement"><span>More conversations. One clear price.</span><a href="/pricing/">Recording &amp; Power Dialer included {{ icon('arrow') }}</a></div>
@@ -22,4 +22,21 @@
 <div class="legal-identity"><p>Dialnytics is operated by <strong>{{ business.legal_name }}</strong>, registered in England and Wales. Company number: {{ business.company_number }}.<br>Registered office: {{ business.address }}. This is the registered office, not a walk-in support location.</p></div>
 <div class="footer-bottom"><span>&copy; {{ year }} Dialnytics. All rights reserved.</span><div><a href="/legal/privacy/">Privacy</a><a href="/legal/terms/">Terms</a><a href="/legal/billing-refund-cancellation/">Billing</a><a href="/admin">Staff access</a></div></div></div></footer>
 <a class="whatsapp-fab" href="https://wa.me/{{ business.whatsapp }}" target="_blank" rel="noopener" aria-label="Chat with Dialnytics on WhatsApp">{{ icon('phone') }}<span>Let's talk</span></a>
-{% block scripts %}{% endblock %}</body></html>
+<div id="cookie-banner" class="cookie-banner" hidden>
+    <div class="cookie-content">
+        <strong>We value your privacy</strong>
+        <p>We use optional marketing cookies to measure advertising performance. You can accept or reject these cookies.</p>
+        <div class="cookie-actions">
+            <button type="button" id="cookie-reject">Reject</button>
+            <button type="button" id="cookie-accept">Accept</button>
+        </div>
+    </div>
+</div>
+
+<button type="button" id="cookie-settings" class="cookie-settings">
+    Cookie Settings
+</button>
+
+<script src="/static/js/cookie-consent.js" defer></script>
+{% block scripts %}{% endblock %}
+</body></html>
