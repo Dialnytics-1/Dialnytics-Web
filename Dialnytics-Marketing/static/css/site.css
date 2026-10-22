@@ -21,3 +21,28 @@ label{display:block;font-size:12px;font-weight:640;color:var(--ink);margin:20px 
 @media(max-width:350px){.container{width:calc(100% - 28px)}.hero h1{font-size:36px}.brand{font-size:22px}.hero-actions{flex-direction:column;align-items:stretch}.hero-checks{gap:8px;justify-content:flex-start;font-size:8px}.hero-pill{font-size:7px}.value-ribbon strong{font-size:23px}.value-ribbon strong span{font-size:10px}.value-ribbon>div>div>span{font-size:8px}.solution-feature-grid{grid-template-columns:1fr}.plan-card .check-list{grid-template-columns:1fr}.calculator{padding:20px}.calc-users{flex-direction:column;align-items:flex-start}.wizard-progress li{font-size:8px}.wizard-actions{flex-wrap:wrap}.wizard-actions>.button{flex:1}.summary-total strong{font-size:26px}.order-summary h2{font-size:20px}.mini-stat-grid strong{font-size:20px}.mini-stat-grid span{font-size:7px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media print{.site-header,.announcement,.site-footer,.whatsapp-fab,.back-link,.wizard-progress,.wizard-actions,.success-actions,#order-whatsapp,.order-heading,.order-summary .text-link{display:none!important}body{color:#000;background:#fff;font-size:12pt}.container{width:100%;max-width:none}.order-section{padding:0;background:#fff}.order-layout{display:grid;grid-template-columns:2fr 1fr;gap:15px}.card{box-shadow:none;border-color:#aaa;padding:15px}.order-summary{order:initial;position:static}.order-main{padding:10px}a{color:#000}.reference-box strong{color:#000}}
+
+/* Dialnytics new logo */
+.brand {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.brand .brand-logo {
+    display: block;
+    width: 210px;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+@media (max-width: 768px) {
+    .brand .brand-logo {
+        width: 155px;
+    }
+}
+
+.footer-brand .brand-logo {
+    width: 190px;
+}
