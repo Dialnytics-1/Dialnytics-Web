@@ -127,3 +127,11 @@ label{display:block;font-size:12px;font-weight:640;color:var(--ink);margin:20px 
         padding: 18px;
     }
 }
+/* Fix Cookie Settings and WhatsApp button overlap */
+@media (max-width: 768px) {
+    .whatsapp-fab {
+        bottom: 85px !important;
+        right: 15px;
+        z-index: 70;
+    }
+}
