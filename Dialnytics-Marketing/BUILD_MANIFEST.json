@@ -1,0 +1,329 @@
+{
+  "project": "Dialnytics standalone marketing website",
+  "date": "2026-10-22",
+  "marketing_domain": "dialnytics.uk",
+  "admin_path": "/admin",
+  "existing_dialer": "https://dialnytics.co.uk",
+  "database": "Separate marketing database required",
+  "verification": {
+    "backend_tests_passed": 47,
+    "javascript_pricing_assertions_passed": 21,
+    "public_route_checks": 120,
+    "layout_combinations_checked": 64,
+    "browser_interaction_groups_passed": 8,
+    "live_production_tested": false,
+    "details": "docs/QA_REPORT.md"
+  },
+  "files": [
+    {
+      "path": ".dockerignore",
+      "bytes": 67,
+      "sha256": "c236cf71984585dd1cf3d0c5ee4db5d88e807d422dd1d0b2f3ef88e14da14a72"
+    },
+    {
+      "path": ".env.example",
+      "bytes": 944,
+      "sha256": "07df3d79a4abac74d17f9214cba6d34e3ce92772ebb131a6e5e2add53220dbce"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 134,
+      "sha256": "b799df405999055b19b3a19e3e67a2f6919a8eacd13055856f6e4db3bdb5a8b5"
+    },
+    {
+      "path": ".python-version",
+      "bytes": 5,
+      "sha256": "49a506dd32096b010d75205acf3430c9ae6c40351888129499e5a5e487126c93"
+    },
+    {
+      "path": "Dockerfile",
+      "bytes": 388,
+      "sha256": "c860ea52b618872d49d90a2864e74cc72a7621d1883324c29266e25fe72bdd9d"
+    },
+    {
+      "path": "README.md",
+      "bytes": 8407,
+      "sha256": "10f59b3b80a40a3e1eac5116610d1f61f7175c6a929f1666fbffb57cfe778ec4"
+    },
+    {
+      "path": "START_WINDOWS.bat",
+      "bytes": 685,
+      "sha256": "638f4693e5df663c98fb03f48488f6ae51ec78541f27c838725359a7db31899f"
+    },
+    {
+      "path": "app/__init__.py",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/catalog.py",
+      "bytes": 5576,
+      "sha256": "583bf5e4221fe646698d6214724d81f384ffd9f9ff41f72373554411f189a1f3"
+    },
+    {
+      "path": "app/content.py",
+      "bytes": 44677,
+      "sha256": "9dfb0f7a71378985c50481e17744dec679193fe081f79da7919c56be5acfd123"
+    },
+    {
+      "path": "app/database.py",
+      "bytes": 5326,
+      "sha256": "ebeaa5988e54e2590b103c76ee8d288ca83da961eb862352d9ece900b4a539e9"
+    },
+    {
+      "path": "app/mail.py",
+      "bytes": 2948,
+      "sha256": "079c080ed362a0b99561de0de08a6cefc936cbc5169b44e4324be05d3d41e122"
+    },
+    {
+      "path": "app/main.py",
+      "bytes": 29393,
+      "sha256": "d7cecee991be9ee56b0d166c2f45af17aa6c38445373f049384fd2a63761571f"
+    },
+    {
+      "path": "app/manage.py",
+      "bytes": 2502,
+      "sha256": "5c26e4798f57398302b9c8df675e0ed7e964e609140dc1593e028c74589e9e01"
+    },
+    {
+      "path": "app/security.py",
+      "bytes": 1440,
+      "sha256": "3847f300104f3cccaa5c718d0c2703ac2e7b84d03acd334ef4e136889e90348d"
+    },
+    {
+      "path": "app/settings.py",
+      "bytes": 2692,
+      "sha256": "bed50594dee89e0f7d0621b515ebacc98b95cabe288df3220e82a8a3f7d73666"
+    },
+    {
+      "path": "data/.gitkeep",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "docs/DEPLOYMENT.md",
+      "bytes": 6534,
+      "sha256": "450346187bcec7400474f47666a5950f4f431d02c4dde2fe2cd96d5a3109fa4d"
+    },
+    {
+      "path": "docs/PAGES.md",
+      "bytes": 7456,
+      "sha256": "5eee7335294a08a6783ce86acdc1bf799bbcd57afc8573e7a2ed21815197220c"
+    },
+    {
+      "path": "docs/PRICING.md",
+      "bytes": 2063,
+      "sha256": "27ffea102ddb11b9400f9e96ad3eb020784834b5ee15624ec82097444ad8ddc0"
+    },
+    {
+      "path": "docs/QA_REPORT.md",
+      "bytes": 2992,
+      "sha256": "97d5e3021fe36b558c0981368a40b0880d00a86f96e37294658cd348b87852ac"
+    },
+    {
+      "path": "docs/SECURITY.md",
+      "bytes": 2673,
+      "sha256": "713559977f6195b858d48410c798a209ce44672b7e77cf57b44fce477aaa55e1"
+    },
+    {
+      "path": "docs/SOURCES_AND_SCOPE.md",
+      "bytes": 2257,
+      "sha256": "19edfb9b1b29ea9a8f033f9e602577fef850a3177dc52916a656167ce0750310"
+    },
+    {
+      "path": "package.json",
+      "bytes": 115,
+      "sha256": "7fe1973d4a3bab7f6aadff566598b996f73824b3010893f6d5d2484870fcf874"
+    },
+    {
+      "path": "render.yaml",
+      "bytes": 1039,
+      "sha256": "8b5f51580224b982743060b8ac8b45040921450e1fd63f2f0fd16b616b907f6b"
+    },
+    {
+      "path": "requirements-dev.txt",
+      "bytes": 93,
+      "sha256": "ecdbe4f23d1cfcc5cdec81f701ff424cfe8b17fa7fa44fc44626a15f41cf549f"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 196,
+      "sha256": "529505ffa548dc56702ca86fd9d99b7eee276e1316cf642c896bda68df33b95e"
+    },
+    {
+      "path": "start-local.sh",
+      "bytes": 256,
+      "sha256": "4d7cda1196fb7dfe273d3ce8527bcc6c1e330e2b4a05f639f062f59473274bca"
+    },
+    {
+      "path": "static/css/admin.css",
+      "bytes": 7971,
+      "sha256": "254b56e1a22dc404fa6f0d80174dd518e3198fd9831bfce4d97782d1668bed59"
+    },
+    {
+      "path": "static/css/site.css",
+      "bytes": 55440,
+      "sha256": "6be25b30b609ddb63c0b8348b3a72915811a38badc0495f4688f48e492f7303e"
+    },
+    {
+      "path": "static/img/favicon.svg",
+      "bytes": 397,
+      "sha256": "e6dcc9aad60d938547c2fbc2f122aca5bea33d32c7cadae921b2765e9dc89519"
+    },
+    {
+      "path": "static/img/mark.svg",
+      "bytes": 397,
+      "sha256": "e6dcc9aad60d938547c2fbc2f122aca5bea33d32c7cadae921b2765e9dc89519"
+    },
+    {
+      "path": "static/img/social-card.png",
+      "bytes": 49826,
+      "sha256": "5e59a108529d18f158565c7b3de2f2e8a2124c90482bd5bf84ef6a5dfe02a66f"
+    },
+    {
+      "path": "static/img/social-card.svg",
+      "bytes": 847,
+      "sha256": "95e8359b9b77f7425ddb449d93da768aea90ea0d0e95e8fe105c999a046acb65"
+    },
+    {
+      "path": "static/js/admin.js",
+      "bytes": 252,
+      "sha256": "af3efa74210ff274c46d10316b4be94d0d95f9cf0be066f4225438b00a7f329c"
+    },
+    {
+      "path": "static/js/forms.js",
+      "bytes": 1883,
+      "sha256": "d08b8d8f9772598951ca880735e0aea9e7bdb9752ae5b3cc55c01bd37a9df5fd"
+    },
+    {
+      "path": "static/js/order.js",
+      "bytes": 7184,
+      "sha256": "2f79fdb9bfdebce242b923c783a8bafe6bf9025d771649f99e147dc0bf862116"
+    },
+    {
+      "path": "static/js/pricing.js",
+      "bytes": 1442,
+      "sha256": "9d3607cad4b8d5a3ba431184759b5309a612af604038ac9946f37db84a551ddf"
+    },
+    {
+      "path": "static/js/shared.js",
+      "bytes": 3395,
+      "sha256": "117b66da74df67fe2aaeef055739444b26e63027dd355b405b9393474bcb8573"
+    },
+    {
+      "path": "static/js/site.js",
+      "bytes": 2707,
+      "sha256": "7ca53eae4c98eb3dc52bd81815d7ba4633e537669787b3572ae326f46c5766ee"
+    },
+    {
+      "path": "templates/404.html",
+      "bytes": 473,
+      "sha256": "2cd4f4b7cab9dbdf975c083058b8acc5819773759acfc6b43ee4276f25505490"
+    },
+    {
+      "path": "templates/admin_activity.html",
+      "bytes": 708,
+      "sha256": "0a47759c5aacb10c88da1e762f516b76b498f3a4a28e257a9f51965cfd406551"
+    },
+    {
+      "path": "templates/admin_base.html",
+      "bytes": 1273,
+      "sha256": "189059b5fd7116f1204e6918a79dccd8fe95769eedd12c1bd068d10e00fd7576"
+    },
+    {
+      "path": "templates/admin_detail.html",
+      "bytes": 3869,
+      "sha256": "146121dae10d701f1b66e70e03003b8b487698024a41927a0de22bd73c853b5d"
+    },
+    {
+      "path": "templates/admin_inbox.html",
+      "bytes": 3919,
+      "sha256": "1c2e951e1dbf68a6015b757d41fdff0cdb7b562f06b37b74a6fb8111fa419561"
+    },
+    {
+      "path": "templates/admin_login.html",
+      "bytes": 910,
+      "sha256": "d02ad41c85dba4f721c16c7b95938b98c98a3b6528a2bece2b7d0e80dd20bcd2"
+    },
+    {
+      "path": "templates/base.html",
+      "bytes": 8021,
+      "sha256": "ff5a2be8a29c500c2132c42213003efec375154897654319143267e3fd5ce889"
+    },
+    {
+      "path": "templates/collection.html",
+      "bytes": 1009,
+      "sha256": "77d459cd43b1195b6ec358375438185172628a37709672d4aa6ef8095ac51cbe"
+    },
+    {
+      "path": "templates/content.html",
+      "bytes": 1911,
+      "sha256": "8ef09c18a9626a076d84c40c74f94e80037182ee80465fe2ccb697ca79d1dcf4"
+    },
+    {
+      "path": "templates/countries.html",
+      "bytes": 1056,
+      "sha256": "1abdea3406401d3bcec97c0dd94955ecf81bb5e23c8b9e5957aeff7ca5d21278"
+    },
+    {
+      "path": "templates/country.html",
+      "bytes": 2362,
+      "sha256": "5588c825e178d3747fb7a86f42ee3c533b960656c2a128ec3f144fbe1200d553"
+    },
+    {
+      "path": "templates/faq.html",
+      "bytes": 458,
+      "sha256": "b852282db434e23a8fedcafca05a103400ce3a2136cb4dff2a342397f01f7fb0"
+    },
+    {
+      "path": "templates/form.html",
+      "bytes": 6489,
+      "sha256": "2d17e922c1777807faa4724be599fe266be16b38d85dc9dc2fc462c949ded137"
+    },
+    {
+      "path": "templates/home.html",
+      "bytes": 7631,
+      "sha256": "b765c13e78d21a2f565e1d5b73f0cb0d87d2b0de59de27a950efe6a25c6054b9"
+    },
+    {
+      "path": "templates/macros.html",
+      "bytes": 3364,
+      "sha256": "48153fbb5e24930eae4a9c636016568f3d26cd2a97841c629ac0b69040e31b0e"
+    },
+    {
+      "path": "templates/order.html",
+      "bytes": 8155,
+      "sha256": "8ded076913326ec4788878359fd41c36df912ae75ab8d546526b8bd535482dff"
+    },
+    {
+      "path": "templates/preview.html",
+      "bytes": 2226,
+      "sha256": "f697b30a28cd9bddc5eb27ddd3cf474977360a804ddc28584d8e5868dc5bb45c"
+    },
+    {
+      "path": "templates/pricing.html",
+      "bytes": 5280,
+      "sha256": "93a0f5a653e5d34631fc7afd8780a9f3fcd55ea3f521849ec3cc0bf3740ec52e"
+    },
+    {
+      "path": "templates/search.html",
+      "bytes": 1084,
+      "sha256": "381c9772c48a76b0a32f1862178d7e8ecd0962b471020e08bccde13801c07de2"
+    },
+    {
+      "path": "templates/tour.html",
+      "bytes": 1930,
+      "sha256": "e6fc17016da771f01e86e860a9afeeb1d8e6137784cd7010ec303dfa5e0f05aa"
+    },
+    {
+      "path": "tests/pricing.mjs",
+      "bytes": 953,
+      "sha256": "76593486493aad4bf350b3440ad4f4e52961456e150157ac015f8c9c892a3e9d"
+    },
+    {
+      "path": "tests/test_application.py",
+      "bytes": 11676,
+      "sha256": "783a11698ae784c66eae5bf822447c4372e6275476fab409290760a3fa3706c7"
+    }
+  ]
+}

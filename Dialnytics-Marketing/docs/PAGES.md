@@ -1,0 +1,140 @@
+# Public route manifest
+
+Total mapped public routes: **120**. All were exercised by the local HTTP test suite.
+
+Dynamic routes are rendered from shared templates and original structured content.
+
+- `/` - /
+- `/about/` - Built around the next conversation.
+- `/blog/` - Better conversations start with preparation.
+- `/blog/call-history/` - Understanding call history
+- `/blog/contacts/` - Keeping contacts organised
+- `/blog/crm-import/` - Preparing a CRM CSV
+- `/blog/first-call/` - Making your first call
+- `/blog/power-dialer/` - Working with a Power Dialer queue
+- `/blog/recording/` - Recording responsibly
+- `/book-demo/` - /book-demo/
+- `/compare/` - Compare what matters to your team.
+- `/compare/aircall/` - Evaluating Dialnytics alongside Aircall
+- `/compare/cloudtalk/` - Evaluating Dialnytics alongside CloudTalk
+- `/compare/dialpad/` - Evaluating Dialnytics alongside Dialpad
+- `/compare/google-voice/` - Evaluating Dialnytics alongside Google Voice
+- `/compare/justcall/` - Evaluating Dialnytics alongside JustCall
+- `/compare/nextiva/` - Evaluating Dialnytics alongside Nextiva
+- `/compare/openphone/` - Evaluating Dialnytics alongside Quo / OpenPhone
+- `/compare/ringcentral/` - Evaluating Dialnytics alongside RingCentral
+- `/compare/telnyx/` - Evaluating Dialnytics alongside Telnyx
+- `/compare/twilio/` - Evaluating Dialnytics alongside Twilio
+- `/contact/` - /contact/
+- `/custom-quote/` - /custom-quote/
+- `/docs/` - Start here. Keep moving.
+- `/docs/account-access/` - Signing in safely
+- `/docs/audio/` - Troubleshooting browser audio
+- `/docs/billing/` - Plans, payment and activation
+- `/docs/call-history/` - Understanding call history
+- `/docs/contacts/` - Keeping contacts organised
+- `/docs/crm-import/` - Preparing a CRM CSV
+- `/docs/dnc/` - Handling opt-outs
+- `/docs/first-call/` - Making your first call
+- `/docs/incoming/` - Preparing for incoming calls
+- `/docs/notes/` - Writing useful call notes
+- `/docs/power-dialer/` - Working with a Power Dialer queue
+- `/docs/recording/` - Recording responsibly
+- `/faq/` - /faq/
+- `/get-started/` - /get-started/
+- `/get-started/australia/` - /get-started/australia/
+- `/get-started/custom/` - /get-started/custom/
+- `/get-started/europe/` - /get-started/europe/
+- `/get-started/global/` - /get-started/global/
+- `/get-started/japan/` - /get-started/japan/
+- `/get-started/uk-to-europe/` - /get-started/uk-to-europe/
+- `/get-started/uk/` - /get-started/uk/
+- `/get-started/usa-canada/` - /get-started/usa-canada/
+- `/how-it-works/` - From your plan to your first call.
+- `/legal/` - Clear information before you decide.
+- `/legal/acceptable-use/` - Acceptable Use
+- `/legal/billing-refund-cancellation/` - Billing, Refunds & Cancellation
+- `/legal/call-recording/` - Call Recording & Consent
+- `/legal/cookies/` - Cookies & Website Security
+- `/legal/fair-usage/` - Unlimited Calling & Usage
+- `/legal/privacy/` - Privacy Notice
+- `/legal/sms-messaging/` - SMS & Messaging Availability
+- `/legal/suspension-termination/` - Suspension & Termination
+- `/legal/terms/` - Terms of Service
+- `/numbers/` - /numbers/
+- `/numbers/australia/` - /numbers/australia/
+- `/numbers/canada/` - /numbers/canada/
+- `/numbers/custom/` - /numbers/custom/
+- `/numbers/europe/` - /numbers/europe/
+- `/numbers/global/` - /numbers/global/
+- `/numbers/japan/` - /numbers/japan/
+- `/numbers/uk-to-europe/` - /numbers/uk-to-europe/
+- `/numbers/uk/` - /numbers/uk/
+- `/numbers/usa-canada/` - /numbers/usa-canada/
+- `/numbers/usa/` - /numbers/usa/
+- `/payments/` - Choose how you would like to pay.
+- `/pricing/` - /pricing/
+- `/product/` - Explore the workspace.
+- `/product/ai-insights/` - AI Summaries & Transcripts
+- `/product/business-numbers/` - Give every conversation a recognisable number.
+- `/product/call-logs/` - Every attempt deserves context.
+- `/product/call-recording/` - Keep the conversation, not just the outcome.
+- `/product/calling/` - Your business conversations. One browser.
+- `/product/campaigns/` - Turn a lead list into a focused calling session.
+- `/product/contacts/` - Keep the details that make calls useful.
+- `/product/crm/` - Your leads and calls, in the same workflow.
+- `/product/custom-fields/` - Custom Fields
+- `/product/dashboard/` - Know where your calling time goes.
+- `/product/dispositions/` - Make the next action obvious.
+- `/product/do-not-call/` - An opt-out should change the workflow.
+- `/product/floating-phone/` - Floating Phone
+- `/product/follow-ups/` - Leave the next conversation better prepared.
+- `/product/incoming-calls/` - Be there when customers call back.
+- `/product/live-captions/` - Live Captions
+- `/product/overview/` - One workspace. Every conversation in context.
+- `/product/scripts/` - Give your team a useful starting point.
+- `/product/search/` - Less hunting. More context.
+- `/product/sms/` - SMS & Voicemail
+- `/product/tour/` - /product/tour/
+- `/roadmap/` - Coming later. Not sold today.
+- `/solutions/` - A calling workflow for your team.
+- `/solutions/appointments/` - Confirm the details before the visit.
+- `/solutions/automotive/` - Turn vehicle enquiries into useful conversations.
+- `/solutions/clinics-healthcare/` - Keep administrative calls focused and private.
+- `/solutions/construction/` - A practical voice workflow for project enquiries.
+- `/solutions/customer-support/` - Make a callback feel like a continuation.
+- `/solutions/ecommerce/` - A calling workflow for customer order questions.
+- `/solutions/education/` - Keep admissions conversations organised.
+- `/solutions/events/` - Keep venue, vendor and client calls organised.
+- `/solutions/fitness-wellness/` - Give membership enquiries a personal response.
+- `/solutions/front-desk/` - A recognisable business number for incoming enquiries.
+- `/solutions/hotels-hospitality/` - Follow up reservations with a personal conversation.
+- `/solutions/insurance/` - Keep renewal enquiries clear and documented.
+- `/solutions/lead-follow-up/` - Give each enquiry a thoughtful next step.
+- `/solutions/logistics-courier/` - Close the loop on delivery questions.
+- `/solutions/marketing-agencies/` - Keep client calling workflows consistent.
+- `/solutions/order-confirmations/` - Confirm the order, not sensitive payment details.
+- `/solutions/real-estate/` - Bring property enquiries into one calling workflow.
+- `/solutions/recruitment/` - Keep candidate and client conversations in context.
+- `/solutions/restaurants-food/` - Make bookings and order confirmations easier to handle.
+- `/solutions/sales/` - Keep prospect context close to every conversation.
+- `/solutions/services/` - From the first enquiry to the agreed next step.
+- `/solutions/solo/` - A business calling workspace without a large team.
+- `/solutions/team/` - A consistent workflow as your team grows.
+- `/solutions/travel-tourism/` - Help customers organise the next part of their journey.
+- `/support/` - /support/
+- `/system-requirements/` - Get your browser ready to call.
+
+## Utility routes
+
+- `/search/` - public website search
+- `/admin` - separate marketing inbox
+- `/admin/login` - admin sign-in
+- `/admin/requests/{id}` - request details, notes and status
+- `/admin/activity` - admin audit history
+- `/admin/export.csv` - authenticated filtered export
+- `/api/requests` - CSRF-protected request submission
+- `/api/quote` - server-side price calculation
+- `/healthz`, `/robots.txt`, `/sitemap.xml`
+
+No Refer & Earn route is included. Customer-story pages are omitted, not fabricated.
