@@ -141,16 +141,17 @@ def create_app(settings=None):
 
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' https://connect.facebook.net; "
+            "script-src 'self' https://connect.facebook.net https://www.googletagmanager.com; "
             "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https://www.facebook.com; "
+            "img-src 'self' data: https://www.facebook.com https://www.google-analytics.com https://region1.google-analytics.com; "
             "font-src 'self'; "
-            "connect-src 'self' https://www.facebook.com https://connect.facebook.net; "
+            "connect-src 'self' https://www.facebook.com https://connect.facebook.net https://www.google-analytics.com https://region1.google-analytics.com https://*.google-analytics.com; "
             "form-action 'self'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "object-src 'none'"
         )
+
 
 
 
