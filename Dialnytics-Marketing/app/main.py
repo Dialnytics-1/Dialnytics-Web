@@ -137,9 +137,10 @@ def create_app(settings=None):
         response.headers['Permissions-Policy'] = (
             'camera=(), microphone=(), geolocation=()'
         )
-        response.headers['Content-Security-Policy'] = (
+        
+response.headers['Content-Security-Policy'] = (
     "default-src 'self'; "
-    "script-src 'self' 'sha256-REPLACE_WITH_PIXEL_SCRIPT_HASH' https://connect.facebook.net; "
+    "script-src 'self' https://connect.facebook.net; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https://www.facebook.com; "
     "font-src 'self'; "
@@ -149,6 +150,7 @@ def create_app(settings=None):
     "base-uri 'self'; "
     "object-src 'none'"
 )
+
 
         if request.url.path.startswith(('/admin', '/api')):
             response.headers['Cache-Control'] = 'no-store'
