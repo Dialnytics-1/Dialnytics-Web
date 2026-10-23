@@ -5,6 +5,7 @@
 <meta property="og:title" content="{{ page_title }} | Dialnytics"><meta property="og:description" content="{{ description }}"><meta property="og:type" content="website"><meta property="og:url" content="{{ canonical }}"><meta property="og:image" content="{{ base_url }}/static/img/social-card.png">
 <link rel="icon" href="/static/img/dialnytics-favlogo.png?v=2" type="image/png"><link rel="stylesheet" href="/static/css/site.css?v=6"><meta name="csrf-token" content="{{ csrf }}">
 <script src="/static/js/site.js?v=4" defer></script>
+{% if chat_enabled %}<link rel="stylesheet" href="/static/css/chat-widget.css?v=1"><script src="/static/js/chat-widget.js?v=1" defer></script>{% endif %}
 {% block head %}{% endblock %}
 </head><body><a class="skip-link" href="#main">Skip to content</a>
 <div class="announcement"><span>More conversations. One clear price.</span><a href="/pricing/">Recording &amp; Power Dialer included {{ icon('arrow') }}</a></div>
@@ -22,7 +23,7 @@
 <div class="footer-hours"><div>{{ icon('bolt') }}<span><strong>24/7 account activation</strong>10-15 minutes after payment confirmation</span></div><div>{{ icon('headset') }}<span><strong>Customer support</strong>Mon-Fri, 3 PM-3 AM next morning, PKT (UTC+5)</span></div></div>
 <div class="legal-identity"><p>Dialnytics is operated by <strong>{{ business.legal_name }}</strong>, registered in England and Wales. Company number: {{ business.company_number }}.<br>Registered office: {{ business.address }}. This is the registered office, not a walk-in support location.</p></div>
 <div class="footer-bottom"><span>&copy; {{ year }} Dialnytics. All rights reserved.</span><div><a href="/legal/privacy/">Privacy</a><a href="/legal/terms/">Terms</a><a href="/legal/billing-refund-cancellation/">Billing</a><a href="/admin">Staff access</a></div></div></div></footer>
-<a class="whatsapp-fab" href="https://wa.me/{{ business.whatsapp }}" target="_blank" rel="noopener" aria-label="Chat with Dialnytics on WhatsApp">{{ icon('phone') }}<span>Let's talk</span></a>
+{% if chat_enabled %}<div id="dn-chat" class="dnc" data-wa="{{ business.whatsapp }}" hidden></div>{% else %}<a class="whatsapp-fab" href="https://wa.me/{{ business.whatsapp }}" target="_blank" rel="noopener" aria-label="Chat with Dialnytics on WhatsApp">{{ icon('phone') }}<span>Let's talk</span></a>{% endif %}
 <div id="cookie-banner" class="cookie-banner" hidden>
     <div class="cookie-content">
         <strong>We value your privacy</strong>

@@ -22,6 +22,22 @@ class Settings:
     mail_from: str = field(default_factory=lambda: os.getenv('MAIL_FROM',''))
     mail_to: str = field(default_factory=lambda: os.getenv('NOTIFICATION_EMAIL','admin@dialnytics.co.uk'))
     worker: bool = field(default_factory=lambda: os.getenv('EMAIL_WORKER_ENABLED','true').lower() == 'true')
+    # AI customer-service assistant (website chat + WhatsApp)
+    anthropic_key: str = field(default_factory=lambda: os.getenv('ANTHROPIC_API_KEY','').strip())
+    ai_model: str = field(default_factory=lambda: os.getenv('AI_MODEL','claude-haiku-5-5').strip())
+    chat_enabled: bool = field(default_factory=lambda: os.getenv('CHAT_WIDGET_ENABLED','true').lower() == 'true')
+    telnyx_key: str = field(default_factory=lambda: os.getenv('TELNYX_API_KEY','').strip())
+    telnyx_public_key: str = field(default_factory=lambda: os.getenv('TELNYX_PUBLIC_KEY','').strip())
+    wa_from: str = field(default_factory=lambda: os.getenv('WHATSAPP_FROM_NUMBER','+447476629105').strip())
+    wa_profile_id: str = field(default_factory=lambda: os.getenv('TELNYX_MESSAGING_PROFILE_ID','').strip())
+    wa_ai_default: bool = field(default_factory=lambda: os.getenv('WHATSAPP_AI_DEFAULT','true').lower() == 'true')
+    admin_whatsapp: str = field(default_factory=lambda: os.getenv('ADMIN_WHATSAPP_NUMBER','').strip())
+    wa_alert_template: str = field(default_factory=lambda: os.getenv('WHATSAPP_ALERT_TEMPLATE','').strip())
+    wa_alert_lang: str = field(default_factory=lambda: os.getenv('WHATSAPP_ALERT_TEMPLATE_LANG','en').strip())
+    @property
+    def ai_ready(self): return bool(self.anthropic_key)
+    @property
+    def whatsapp_ready(self): return bool(self.telnyx_key and self.telnyx_public_key and self.wa_from)
     @property
     def production(self): return self.env == 'production'
     @property

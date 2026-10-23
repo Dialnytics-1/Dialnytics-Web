@@ -1,0 +1,375 @@
+"""Dialnytics AI customer-service assistant: knowledge, Claude API calls, lead fields,
+and Telnyx WhatsApp helpers. No database code here (see chat_routes.py)."""
+import base64, json, logging, re, time, uuid, urllib.request, urllib.error
+from dataclasses import dataclass, field
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote
+
+log = logging.getLogger('dialnytics.chatbot')
+ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
+TELNYX_WA_URL = 'https://api.telnyx.com/v2/messages/whatsapp'
+REQUIRED_FIELDS = ('name', 'whatsapp', 'company', 'calling_country', 'users')
+FIELD_LABELS = {'name': 'Name', 'whatsapp': 'WhatsApp number', 'company': 'Company name',
+                'calling_country': 'Calling country', 'users': 'Users needed', 'email': 'Email',
+                'plan_interest': 'Plan interest', 'notes': 'Notes'}
+
+# ---------------------------------------------------------------- fixed texts
+LANG_MENU = ("Welcome to Dialnytics! 👋\nPlease choose your language:\n1. English\n2. Roman Urdu\n\n"
+             "Reply 1 or 2.")
+GREETING = {
+    'en': "Great! I'm the Dialnytics virtual assistant. I can help with plans, prices and getting your "
+          "business calling set up. What would you like to know?",
+    'ur': "Zabardast! Main Dialnytics ka virtual assistant hoon. Plans, prices aur aap ki business calling "
+          "setup karne mein madad kar sakta hoon. Bataiye, aap kya janna chahte hain?",
+}
+FALLBACK = {
+    'en': "Sorry, I'm having a short delay. Our team has been notified and will reply here shortly.",
+    'ur': "Maazrat, abhi thori der ho rahi hai. Hamari team ko bata diya gaya hai, woh jald yahin jawab degi.",
+}
+LIMIT_REACHED = {
+    'en': "Thank you! Our team will continue this conversation with you personally.",
+    'ur': "Shukriya! Ab hamari team khud aap se baat aage barhayegi.",
+}
+PAUSED_NOTE = {
+    'en': "Thanks, our team has your message and will reply here.",
+    'ur': "Shukriya, aap ka message team tak pohanch gaya hai, woh yahin jawab degi.",
+}
+
+def language_choice(text: str):
+    t = (text or '').strip().lower().strip('.!) ')
+    if t in ('1', 'english', 'eng', 'en', 'english please', '1 english'): return 'en'
+    if t in ('2', 'urdu', 'roman urdu', 'roman', 'ur', '2 roman urdu', 'urdu please', 'اردو'): return 'ur'
+    return None
+
+_UR_WORDS = {'kya', 'hai', 'hain', 'ka', 'ki', 'ke', 'mujhe', 'mujhy', 'chahiye', 'chahye', 'kitne', 'kitny',
+             'aap', 'ap', 'kaise', 'kese', 'krna', 'karna', 'kr', 'nahi', 'ni', 'haan', 'han', 'acha', 'theek',
+             'bhai', 'salam', 'assalam', 'kitna', 'kab', 'kahan', 'kyun', 'mein', 'mai', 'hum', 'tum', 'batao'}
+
+def guess_language(text: str) -> str:
+    words = set(re.findall(r'[a-z]+', (text or '').lower()))
+    if re.search(r'[؀-ۿ]', text or ''): return 'ur'
+    return 'ur' if len(words & _UR_WORDS) >= 2 else 'en'
+
+# ---------------------------------------------------------------- knowledge
+def _usa_line():
+    one, two, three = (price_quote('usa-canada', n) for n in (1, 2, 3))
+    return (f"USA & Canada: 1 user ${one['monthly_total']}/month; 2 users ${two['monthly_total']} total/month; "
+            f"3 or more users ${three['per_user']} per user/month (e.g. 3 users = ${three['monthly_total']}, "
+            f"5 users = ${price_quote('usa-canada', 5)['monthly_total']}).")
+
+def knowledge(base_url: str) -> str:
+    lines = ['PRICES (USD per month, no setup fee, no extra charges, all features included in every plan):',
+             '- ' + _usa_line()]
+    for slug in ('uk', 'australia', 'japan', 'global'):
+        p = PLANS[slug]
+        lines.append(f"- {p['name']}: ${p['price']} per user/month. Plan page: {base_url}/numbers/{slug}/")
+    eu = ', '.join(f"{k} countr{'y' if k == 1 else 'ies'} ${v}" for k, v in EUROPE_TOTALS.items())
+    lines.append(f"- UK to Europe (UK number calling selected European countries): per user/month by number of "
+                 f"destinations: {eu}.")
+    lines.append('- European local numbers and Custom plans: tailored quote from the team.')
+    lines.append(f'- Full pricing and calculator: {base_url}/pricing/')
+    lines.append('FEATURES INCLUDED IN EVERY PLAN:')
+    lines += [f'- {name}: {desc}' for _, name, desc in FEATURES]
+    lines += [
+        'Calling works in the browser (computer or phone browser), no SIM or app needed. Use a headset for best quality.',
+        'HOW IT WORKS: customer shares details -> team confirms number availability and requirements on WhatsApp '
+        '-> payment -> account activated 24/7 within 10-15 minutes after payment confirmation -> login details sent.',
+        'PAYMENT: Bank Transfer, USDT, or Credit/Debit card via a secure Stripe link. The team sends payment '
+        'instructions on WhatsApp. The website/chat never takes payment.',
+        'FREE TRIAL: not offered. Instead, show the product tour: ' + base_url + '/product/tour/ '
+        '(a complete walkthrough of the dialer in under 5 minutes).',
+        'NUMBERS: a dedicated caller ID is included; the team confirms availability of a preferred country/area '
+        'before payment. A chat does not reserve a number.',
+        f"SUPPORT HOURS: {BUSINESS['support_hours']}. Activation is 24/7, separate from support hours.",
+        f"EXISTING CUSTOMERS sign in at {BUSINESS['dialer_url']} (Client Login).",
+        f"CONTACT: WhatsApp {BUSINESS['phone_display']}, email {BUSINESS['email']}. Operated by "
+        f"{BUSINESS['legal_name']} (UK company {BUSINESS['company_number']}).",
+        'REFUNDS: final written refund/cancellation terms are provided by the team before payment; do not promise refunds.',
+        'NOT CONFIRMED IN CHAT: SMS, voicemail, AI transcripts/live captions, discounts, minimum contracts, '
+        'specific number availability. For these say the team will confirm.',
+    ]
+    return '\n'.join(lines)
+
+def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str:
+    lang_rule = ("Reply in ROMAN URDU (Urdu written with English letters, e.g. 'Aap kitne users chahte hain?'). "
+                 "Never use Urdu/Arabic script. Common English words (plan, users, number, price) are fine."
+                 if language == 'ur' else "Reply in clear, simple English.")
+    have = {k: v for k, v in (lead or {}).items() if v not in (None, '')}
+    missing = [FIELD_LABELS[f] for f in REQUIRED_FIELDS if f not in have]
+    channel_rule = ("This chat is on WHATSAPP. The customer's WhatsApp number is already known; do not ask for it. "
+                    "Keep replies very short (1-4 short lines). You may use *bold* sparingly. No tables."
+                    if channel == 'whatsapp' else
+                    "This chat is the WEBSITE chat widget. Plain text only: no markdown, no **, no #, no tables. "
+                    "Keep replies short (1-5 short lines). Ask for their WhatsApp number with country code.")
+    return f"""You are the Dialnytics virtual assistant, the customer-service agent for Dialnytics, a business calling platform (browser dialer with dedicated caller ID, unlimited calling, CRM, Power Dialer and call recording).
+
+LANGUAGE: {lang_rule} If the customer clearly asks to switch language, switch.
+CHANNEL: {channel_rule}
+
+YOUR JOB:
+1. Answer questions about Dialnytics accurately using ONLY the knowledge below. Never invent prices, discounts, trials, features, refund terms, timelines or number availability. If something is not in the knowledge, say the team will confirm it.
+2. Collect the customer's details naturally while helping (ask one or two things at a time, never a long form):
+   name, company name, which country/countries they will call, how many users they need, WhatsApp number with country code{' (already known on WhatsApp)' if channel == 'whatsapp' else ''}, and email (optional - ask once; if they skip, that is fine).
+3. Call the save_lead tool as soon as you learn any of these details (you may call it several times). Do not mention the tool.
+4. When all required details are saved, briefly confirm them and say the team will contact them on WhatsApp with number options and payment instructions. Activation is 10-15 minutes after payment confirmation.
+5. If they ask for a demo or trial: there is no free trial; share the product tour link {base_url}/product/tour/ and offer to answer questions. You may still collect their details.
+6. Quote the correct monthly total for their user count when you know it (compute it from the price rules).
+7. If the customer asks for a human, is angry, has an account/technical problem you cannot solve, or wants something not covered, call request_human and tell them the team will reply here (mention support hours if outside them).
+
+RULES:
+- Never mention telecom carriers, underlying providers or technology vendors, and never name the AI company or model behind you. If asked whether you are a bot, honestly say you are Dialnytics' AI assistant and a human can take over any time.
+- Never ask for or accept card numbers, CVV, passwords, OTPs or recovery phrases. If shared, tell them not to share it.
+- Stay on topic (Dialnytics, business calling). Politely decline unrelated requests.
+- You can only read text. If a message is like '[image received]' or '[audio received]', ask the customer to type their question.
+- Only say details are saved after save_lead succeeded without errors.
+- Be warm, professional and concise. One question at a time at the end of a message is best.
+
+ALREADY SAVED: {json.dumps(have, ensure_ascii=False) if have else 'nothing yet'}
+STILL NEEDED: {', '.join(missing) if missing else 'nothing - all required details collected'}
+
+KNOWLEDGE:
+{knowledge(base_url)}"""
+
+TOOLS = [
+    {'name': 'save_lead',
+     'description': 'Save or update details the customer has shared. Include only fields the customer actually gave.',
+     'input_schema': {'type': 'object', 'properties': {
+         'name': {'type': 'string', 'description': "Customer's full name"},
+         'company': {'type': 'string', 'description': 'Company / business name'},
+         'whatsapp': {'type': 'string', 'description': 'WhatsApp number in international format, e.g. +447700900123'},
+         'calling_country': {'type': 'string', 'description': 'Country or countries they want to call'},
+         'users': {'type': 'integer', 'description': 'Number of users (agents) needed'},
+         'email': {'type': 'string', 'description': 'Email address (optional)'},
+         'plan_interest': {'type': 'string', 'description': 'Plan they are interested in, if clear'},
+         'notes': {'type': 'string', 'description': 'One short line about their needs or use case'}},
+         'additionalProperties': False}},
+    {'name': 'request_human',
+     'description': 'Hand the conversation to the Dialnytics team (customer asks for a human, complaint, account problem, or unanswerable question).',
+     'input_schema': {'type': 'object', 'properties': {'reason': {'type': 'string'}}, 'required': ['reason'],
+                      'additionalProperties': False}},
+]
+
+# ---------------------------------------------------------------- lead fields
+def normalize_phone(value: str):
+    raw = re.sub(r'[\s().-]', '', str(value or ''))
+    if raw.startswith('00'): raw = '+' + raw[2:]
+    if re.fullmatch(r'\+[1-9]\d{7,14}', raw): return raw
+    return None
+
+def clean_lead(data: dict):
+    """Validate a save_lead tool input. Returns (updates, errors)."""
+    updates, errors = {}, []
+    for key in ('name', 'company', 'calling_country', 'plan_interest', 'notes'):
+        if key in data and str(data[key]).strip():
+            updates[key] = re.sub(r'[\x00-\x1f]', ' ', str(data[key])).strip()[:150 if key != 'notes' else 400]
+    if data.get('whatsapp'):
+        phone = normalize_phone(data['whatsapp'])
+        if phone: updates['whatsapp'] = phone
+        else: errors.append('whatsapp: invalid - ask for the number with country code, e.g. +44 7700 900123')
+    if data.get('email'):
+        email = str(data['email']).strip().lower()[:254]
+        if re.fullmatch(r'[^@\s]+@[^@\s]+\.[a-z]{2,}', email): updates['email'] = email
+        else: errors.append('email: invalid - ask them to check it')
+    if 'users' in data and data['users'] not in (None, ''):
+        try:
+            users = int(data['users'])
+            if not 1 <= users <= 1000: raise ValueError
+            updates['users'] = users
+        except (TypeError, ValueError):
+            errors.append('users: must be a whole number between 1 and 1000')
+    return updates, errors
+
+def missing_fields(lead: dict):
+    return [f for f in REQUIRED_FIELDS if (lead or {}).get(f) in (None, '')]
+
+# ---------------------------------------------------------------- Claude API
+def to_api_messages(rows, limit=40):
+    """rows: iterable of (role, body) oldest first. Returns alternating user/assistant messages."""
+    out = []
+    for role, body in list(rows)[-limit:]:
+        if role not in ('user', 'assistant', 'admin') or not (body or '').strip(): continue
+        api_role = 'user' if role == 'user' else 'assistant'
+        text = body.strip()[:2000]
+        if out and out[-1]['role'] == api_role: out[-1]['content'] += '\n\n' + text
+        else: out.append({'role': api_role, 'content': text})
+    while out and out[0]['role'] != 'user': out.pop(0)
+    if not out or out[-1]['role'] != 'user': return []
+    return out
+
+def call_anthropic(api_key, model, system, messages, tools, timeout=40):
+    body = json.dumps({'model': model, 'max_tokens': 700, 'system': system, 'messages': messages,
+                       'tools': tools}).encode()
+    req = urllib.request.Request(ANTHROPIC_URL, data=body, method='POST', headers={
+        'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'})
+    last = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as res:
+                return json.loads(res.read().decode())
+        except urllib.error.HTTPError as exc:
+            last = exc
+            detail = exc.read()[:300].decode('utf-8', 'replace')
+            log.warning('AI API HTTP %s: %s', exc.code, detail)
+            if exc.code not in (429, 500, 502, 503, 529): break
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last = exc
+            log.warning('AI API connection error: %s', type(exc).__name__)
+        time.sleep(1.5)
+    raise RuntimeError('AI request failed: ' + type(last).__name__)
+
+@dataclass
+class AIResult:
+    text: str = ''
+    lead_updates: dict = field(default_factory=dict)
+    human: str = ''
+    error: bool = False
+
+def run_ai(settings, rows, language, channel, lead, base_url, caller=call_anthropic):
+    """One assistant turn. `rows` are (role, body) pairs. `caller` is injectable for tests."""
+    result = AIResult()
+    messages = to_api_messages(rows)
+    if not messages: return result
+    current = dict(lead or {})
+    earlier = ''
+    try:
+        for _ in range(4):
+            system = system_prompt(language or 'en', channel, current, base_url)
+            resp = caller(settings.anthropic_key, settings.ai_model, system, messages, TOOLS)
+            blocks = resp.get('content') or []
+            texts = [b.get('text', '') for b in blocks if b.get('type') == 'text' and b.get('text', '').strip()]
+            uses = [b for b in blocks if b.get('type') == 'tool_use']
+            if texts: result.text = '\n\n'.join(t.strip() for t in texts)
+            if resp.get('stop_reason') != 'tool_use' or not uses: break
+            outputs = []
+            for use in uses:
+                if use.get('name') == 'save_lead':
+                    updates, errors = clean_lead(use.get('input') or {})
+                    result.lead_updates.update(updates); current.update(updates)
+                    out = {'saved': sorted(updates), 'errors': errors,
+                           'still_needed': [FIELD_LABELS[f] for f in missing_fields(current)]}
+                elif use.get('name') == 'request_human':
+                    result.human = str((use.get('input') or {}).get('reason', 'Customer asked for the team'))[:300]
+                    out = {'ok': True, 'note': 'Team notified. Tell the customer the team will reply here.'}
+                else:
+                    out = {'error': 'unknown tool'}
+                outputs.append({'type': 'tool_result', 'tool_use_id': use.get('id'), 'content': json.dumps(out)})
+            messages = messages + [{'role': 'assistant', 'content': blocks}, {'role': 'user', 'content': outputs}]
+            earlier = result.text or earlier
+            result.text = ''  # the follow-up response carries the reply
+    except Exception:
+        log.exception('AI turn failed')
+        result.error = True
+        result.text = FALLBACK.get(language or 'en', FALLBACK['en'])
+        return result
+    if not result.text.strip():
+        result.text = earlier
+    result.text = clean_reply(result.text, channel)
+    return result
+
+_VENDOR = re.compile(r'\b(telnyx|twilio|anthropic|claude|openai|chatgpt)\b', re.I)
+
+def clean_reply(text: str, channel: str) -> str:
+    text = (text or '').strip()
+    text = _VENDOR.sub('our system', text)
+    if channel != 'whatsapp':
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+        text = re.sub(r'^#+\s*', '', text, flags=re.M)
+    return text[:3000]
+
+# ---------------------------------------------------------------- Telnyx WhatsApp
+def _telnyx_post(settings, payload, timeout=20):
+    req = urllib.request.Request(TELNYX_WA_URL, data=json.dumps(payload).encode(), method='POST', headers={
+        'Authorization': 'Bearer ' + settings.telnyx_key, 'Content-Type': 'application/json',
+        'Accept': 'application/json', 'Idempotency-Key': str(uuid.uuid4())})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as res:
+            data = json.loads(res.read().decode() or '{}')
+    except urllib.error.HTTPError as exc:
+        detail = exc.read()[:400].decode('utf-8', 'replace')
+        log.warning('WhatsApp send HTTP %s: %s', exc.code, detail)
+        raise RuntimeError(f'WhatsApp send failed (HTTP {exc.code})')
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        raise RuntimeError('WhatsApp send failed: ' + type(exc).__name__)
+    return (data.get('data') or {}).get('id', '')
+
+def _base_payload(settings, to):
+    payload = {'from': settings.wa_from, 'to': to, 'type': 'WHATSAPP'}
+    if settings.wa_profile_id: payload['messaging_profile_id'] = settings.wa_profile_id
+    return payload
+
+def send_whatsapp_text(settings, to, body):
+    payload = _base_payload(settings, to)
+    payload['whatsapp_message'] = {'type': 'text', 'text': {'body': body[:4000], 'preview_url': True}}
+    return _telnyx_post(settings, payload)
+
+def send_whatsapp_template(settings, to, name, lang, params):
+    payload = _base_payload(settings, to)
+    payload['whatsapp_message'] = {'type': 'template', 'template': {
+        'name': name, 'language': {'code': lang, 'policy': 'deterministic'},
+        'components': [{'type': 'body', 'parameters': [{'type': 'text', 'text': p} for p in params]}]}}
+    return _telnyx_post(settings, payload)
+
+def template_safe(text: str) -> str:
+    """Meta template parameters cannot contain new lines, tabs or 4+ spaces."""
+    return re.sub(r'\s+', ' ', text or '').strip()[:900]
+
+def verify_telnyx(raw: bytes, signature: str, timestamp: str, public_key: str) -> bool:
+    if not public_key or not signature or not timestamp: return False
+    try:
+        if abs(time.time() - int(timestamp)) > 300: return False
+        key = Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key, validate=True))
+        key.verify(base64.b64decode(signature, validate=True), timestamp.encode('ascii') + b'|' + raw)
+        return True
+    except (ValueError, TypeError, InvalidSignature):
+        return False
+
+def _phone_of(value):
+    if isinstance(value, list): value = value[0] if value else {}
+    if isinstance(value, dict): return str(value.get('phone_number') or '')
+    return str(value or '')
+
+def _text_of(payload):
+    body = payload.get('body')
+    if isinstance(body, dict):
+        btype = str(body.get('type') or '').lower()
+        text = body.get('text')
+        if isinstance(text, dict) and text.get('body'): return str(text['body'])
+        if isinstance(text, str) and text: return text
+        inter = body.get('interactive') or {}
+        for key in ('button_reply', 'list_reply'):
+            if isinstance(inter.get(key), dict) and inter[key].get('title'): return str(inter[key]['title'])
+        if isinstance(body.get('button'), dict) and body['button'].get('text'): return str(body['button']['text'])
+        if btype:
+            caption = (body.get(btype) or {}).get('caption') if isinstance(body.get(btype), dict) else ''
+            return f'[{btype} received]' + (f' {caption}' if caption else '')
+    elif isinstance(body, str) and body:
+        return body
+    return str(payload.get('text') or '')
+
+def parse_whatsapp_event(data: dict) -> dict:
+    """Normalise a Telnyx messaging webhook into one of: inbound, echo, status, ignore."""
+    d = (data or {}).get('data') or {}
+    event, p = d.get('event_type', ''), d.get('payload') or {}
+    mtype = str(p.get('type') or '').lower()
+    body = p.get('body') if isinstance(p.get('body'), dict) else {}
+    if event == 'message.received':
+        if mtype and mtype != 'whatsapp': return {'kind': 'ignore'}
+        if str(body.get('type') or '').lower() in ('edit', 'revoke', 'reaction'): return {'kind': 'ignore'}
+        frm = p.get('from') or {}
+        return {'kind': 'inbound', 'phone': normalize_phone(_phone_of(frm)) or '',
+                'name': str((frm.get('name') if isinstance(frm, dict) else '') or '')[:150],
+                'text': _text_of(p)[:4000], 'provider_id': str(p.get('id') or body.get('foreign_id') or '')}
+    if event == 'message.echo':
+        return {'kind': 'echo', 'phone': normalize_phone(_phone_of(p.get('to'))) or '', 'origin': str(p.get('origin') or ''),
+                'text': _text_of(p)[:4000], 'provider_id': str(p.get('id') or body.get('foreign_id') or '')}
+    if event in ('message.sent', 'message.finalized', 'message.delivered', 'message.read', 'message.failed'):
+        to = p.get('to')
+        status = (to[0].get('status') if isinstance(to, list) and to and isinstance(to[0], dict) else '') or event.split('.')[-1]
+        return {'kind': 'status', 'provider_id': str(p.get('id') or ''), 'status': str(status)[:20]}
+    return {'kind': 'ignore'}
+
+def lead_summary(lead: dict, channel: str) -> str:
+    parts = [f"{FIELD_LABELS[k]}: {lead[k]}" for k in ('name', 'company', 'whatsapp', 'calling_country', 'users', 'email')
+             if lead.get(k) not in (None, '')]
+    return ('Website chat' if channel == 'web' else 'WhatsApp') + ' | ' + ' | '.join(parts)

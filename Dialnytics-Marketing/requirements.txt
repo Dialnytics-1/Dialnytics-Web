@@ -8,3 +8,4 @@ itsdangerous==2.2.0
 email-validator==2.3.0
 pydantic==2.13.5
 psycopg[binary]>=3.2,<4
+cryptography>=43

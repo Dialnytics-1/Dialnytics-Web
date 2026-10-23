@@ -17,10 +17,12 @@ from .security import now, sha, verify_password, form_token, valid_form_token, c
 from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog
 from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ
 from .mail import deliver_one
+from .chat_routes import register_chat
 
 log=logging.getLogger('dialnytics.marketing')
 STATUSES=['new','contacted','awaiting_payment','paid','demo_confirmed','closed','spam']
 KINDS=['order','contact','demo','quote','support']
+ADMIN_KINDS=KINDS+['chat']  # 'chat' leads come from the AI assistant (website + WhatsApp)
 
 class RequestData(BaseModel):
     model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
@@ -177,7 +179,7 @@ def create_app(settings=None):
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
              'catalog':client_catalog(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
-             'current_path':request.url.path,'page_title':'Business calling, without the extra layers.',
+             'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'page_title':'Business calling, without the extra layers.',
              'description':'Unlimited business calling, dedicated caller ID, CRM, Power Dialer and recording. Clear prices. A human setup process.',
              **(context or {})}
         response=templates.TemplateResponse(request=request,name=name,context=ctx,status_code=status)
@@ -370,7 +372,7 @@ def create_app(settings=None):
 
     def query_requests(kind='',status='',q=''):
         qry=select(Submission)
-        if kind in KINDS: qry=qry.where(Submission.kind==kind)
+        if kind in ADMIN_KINDS: qry=qry.where(Submission.kind==kind)
         if status in STATUSES: qry=qry.where(Submission.status==status)
         if q:
             term=q[:150]
@@ -389,7 +391,7 @@ def create_app(settings=None):
             stats=dict(db.execute(select(Submission.kind,func.count()).group_by(Submission.kind)).all())
             unread=db.scalar(select(func.count()).select_from(Submission).where(Submission.status=='new'))
             pending_mail=db.scalar(select(func.count()).select_from(MailJob).where(MailJob.status!='sent'))
-        return render(request,'admin_inbox.html',{'page_title':'Marketing enquiries','admin':sess,'rows':rows,'stats':stats,'unread':unread,'count':count,'page':page,'pages':max(1,math.ceil(count/25)), 'kind':kind,'status':status,'q':q,'statuses':STATUSES,'kinds':KINDS,'mail_ready':settings.mail_ready,'pending_mail':pending_mail,'pager_query':urlencode({'kind':kind,'status':status,'q':q})})
+        return render(request,'admin_inbox.html',{'page_title':'Marketing enquiries','admin':sess,'rows':rows,'stats':stats,'unread':unread,'count':count,'page':page,'pages':max(1,math.ceil(count/25)), 'kind':kind,'status':status,'q':q,'statuses':STATUSES,'kinds':ADMIN_KINDS,'mail_ready':settings.mail_ready,'pending_mail':pending_mail,'pager_query':urlencode({'kind':kind,'status':status,'q':q})})
     @app.get('/admin/requests/{record_id}',response_class=HTMLResponse)
     def detail(request:Request,record_id:str):
         sess=admin_session(request)
@@ -451,6 +453,8 @@ def create_app(settings=None):
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
 
+    register_chat(app,settings,DB,render,require_public_csrf,rate_limit,admin_session,admin_required,audit)
+
     special=['/','/pricing/','/numbers/','/get-started/','/book-demo/','/contact/','/support/','/custom-quote/','/faq/','/product/tour/']
     all_paths=sorted(set(special+list(PAGES)+list(COLLECTIONS)+['/numbers/'+s+'/' for s in list(PLANS)+['usa','canada']]+['/get-started/'+s+'/' for s in PLANS]))
     app.state.public_paths=all_paths
@@ -459,7 +463,7 @@ def create_app(settings=None):
         from xml.sax.saxutils import escape
         return Response('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'+''.join('<url><loc>'+escape(settings.base_url+p)+'</loc></url>' for p in all_paths)+'</urlset>',media_type='application/xml')
     @app.get('/robots.txt')
-    def robots(): return Response('User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nSitemap: '+settings.base_url+'/sitemap.xml\n',media_type='text/plain')
+    def robots(): return Response('User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /webhooks/\nSitemap: '+settings.base_url+'/sitemap.xml\n',media_type='text/plain')
     @app.get('/{path:path}',response_class=HTMLResponse)
     def page(request:Request,path:str):
         route='/'+path.strip('/')+'/'

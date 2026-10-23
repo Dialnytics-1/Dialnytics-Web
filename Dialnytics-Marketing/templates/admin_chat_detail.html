@@ -1,0 +1,50 @@
+{% extends 'admin_base.html' %}{% from 'macros.html' import icon %}{% block content %}
+<a href="/admin/chats" class="back-link">&larr; All chats</a>
+<div class="admin-heading"><div><span class="eyebrow">{{ channel_name|upper }} CHAT</span><h1>{{ conv.display_name or conv.phone or 'Website visitor' }}</h1><p>{% if conv.phone %}{{ conv.phone }} &middot; {% endif %}Language: {{ lang_name }} &middot; Started {{ conv.created_at|stamp }}</p></div>
+<span class="pill-ai big {{ 'on' if conv.ai_enabled else 'off' }}" data-ai-pill>AI {{ 'ON' if conv.ai_enabled else 'OFF' }}</span></div>
+{% if saved=='reply' %}<div class="success-banner" role="status">Reply sent. AI is now OFF for this chat &mdash; switch it on again whenever you want.</div>{% elif saved=='ai' %}<div class="success-banner" role="status">AI setting saved.</div>{% elif saved=='resolved' %}<div class="success-banner" role="status">Marked as handled.</div>{% endif %}
+{% if error=='window' %}<div class="warning-box"><strong>Not sent.</strong> WhatsApp only allows free replies within 24 hours of the customer's last message. Ask the customer to message you again, or reply from your WhatsApp Business app.</div>{% elif error=='send' %}<div class="warning-box"><strong>Not sent.</strong> WhatsApp did not accept the message. Please try again or reply from the WhatsApp Business app.</div>{% elif error=='setup' %}<div class="warning-box"><strong>WhatsApp is not connected.</strong> Add the WhatsApp settings in Render first.</div>{% endif %}
+{% if conv.needs_human %}<div class="warning-box needs-you"><strong>This customer needs you.</strong> The assistant handed this chat to the team. Reply below, then click "Mark handled".</div>{% endif %}
+<div class="chat-detail-grid">
+  <section class="card chat-thread-card">
+    <div class="chat-thread" data-chat-thread data-chat-id="{{ conv.id }}" data-last-id="{{ last_id }}" aria-live="polite">
+      {% for m in messages %}
+      <div class="bubble-row {{ m.role }}" data-id="{{ m.id }}"><div class="bubble"><span class="bubble-who">{{ {'user': conv.display_name or 'Customer', 'assistant': 'AI assistant', 'admin': 'You'}.get(m.role, m.role) }}</span><p>{{ m.body }}</p><small>{{ m.created_at|stamp }}{% if m.status=='failed' %} &middot; <b class="failed">not delivered</b>{% elif m.status %} &middot; {{ m.status }}{% endif %}</small></div></div>
+      {% else %}<p class="muted chat-empty">No messages yet.</p>{% endfor %}
+    </div>
+    <form class="chat-reply" action="/admin/chats/{{ conv.id }}/reply" method="post">
+      <input type="hidden" name="csrf" value="{{ admin.csrf }}">
+      {% set blocked = conv.channel=='whatsapp' and (not whatsapp_ready or not window_open) %}
+      <label for="reply-body" class="sr-only">Your reply</label>
+      <textarea id="reply-body" name="body" rows="3" maxlength="4000" required placeholder="{% if blocked and not whatsapp_ready %}Connect WhatsApp in Render to reply from here{% elif blocked %}24-hour window closed. Reply from your WhatsApp Business app.{% else %}Type your reply&hellip; (Ctrl + Enter to send){% endif %}" {% if blocked %}disabled{% endif %}></textarea>
+      <div class="chat-reply-bar"><small>{% if conv.channel=='web' %}The visitor sees your reply in the website chat while it is open.{% else %}Sent from your WhatsApp Business number.{% endif %} Sending a reply switches AI <b>OFF</b> for this chat.</small><button class="button" type="submit" {% if blocked %}disabled{% endif %}>Send reply {{ icon('arrow') }}</button></div>
+    </form>
+  </section>
+  <aside>
+    <section class="card ai-card">
+      <h2>AI reply</h2>
+      {% if conv.ai_enabled %}
+      <p>The assistant is answering every new message in this chat.</p>
+      <form action="/admin/chats/{{ conv.id }}/ai" method="post"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enabled" value="0"><button class="button danger full" type="submit">Stop AI &mdash; I will reply</button></form>
+      {% else %}
+      <p>AI is off. New messages wait for your reply.</p>
+      <form action="/admin/chats/{{ conv.id }}/ai" method="post"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="enabled" value="1"><button class="button full" type="submit">Turn AI on for this chat</button></form>
+      {% endif %}
+      {% if not ai_ready %}<p class="warning-text">ANTHROPIC_API_KEY is not set, so the assistant cannot write answers yet.</p>{% endif %}
+    </section>
+    <section class="card">
+      <h2>Customer details</h2>
+      <dl class="detail-list">{% for label,value in fields %}<div><dt>{{ label }}</dt><dd>{{ value if value not in (none,'') else '-' }}</dd></div>{% endfor %}</dl>
+      {% if lead_ref %}<a class="button small full" href="/admin/requests/{{ conv.lead_id }}">Open lead {{ lead_ref }} {{ icon('arrow') }}</a>
+      {% elif missing %}<p class="caption">Still needed before a lead is created: {{ missing|join(', ') }}.</p>{% endif %}
+    </section>
+    <section class="card chat-actions">
+      <h2>Actions</h2>
+      {% if conv.phone %}<a class="button secondary small full" href="https://wa.me/{{ conv.phone|replace('+','') }}" target="_blank" rel="noopener">Open in WhatsApp</a>{% endif %}
+      {% if conv.needs_human %}<form action="/admin/chats/{{ conv.id }}/resolve" method="post"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><button class="button secondary small full" type="submit">Mark handled</button></form>{% endif %}
+      <form action="/admin/chats/{{ conv.id }}/delete" method="post" data-confirm-chat-delete><input type="hidden" name="csrf" value="{{ admin.csrf }}"><button class="button danger small full" type="submit">Delete this chat</button></form>
+      <small>Deleting removes the messages only. A saved lead stays in the inbox.</small>
+    </section>
+  </aside>
+</div>
+{% endblock %}

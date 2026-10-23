@@ -36,3 +36,23 @@ services:
         sync: false
       - key: EMAIL_WORKER_ENABLED
         value: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: claude-haiku-5-5
+      - key: CHAT_WIDGET_ENABLED
+        value: true
+      - key: TELNYX_API_KEY
+        sync: false
+      - key: TELNYX_PUBLIC_KEY
+        sync: false
+      - key: WHATSAPP_FROM_NUMBER
+        value: "+447476629105"
+      - key: TELNYX_MESSAGING_PROFILE_ID
+        sync: false
+      - key: WHATSAPP_AI_DEFAULT
+        value: true
+      - key: ADMIN_WHATSAPP_NUMBER
+        sync: false
+      - key: WHATSAPP_ALERT_TEMPLATE
+        sync: false

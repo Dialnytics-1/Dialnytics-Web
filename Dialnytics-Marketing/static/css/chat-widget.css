@@ -1,0 +1,87 @@
+/* Dialnytics AI assistant widget */
+.dnc{--dnc-purple:#6d55df;--dnc-purple2:#8b74ff;--dnc-navy:#111329;--dnc-ink:#172038;--dnc-muted:#626c82;--dnc-line:#e4e6ee;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
+.dnc-launcher{position:fixed;right:20px;bottom:20px;z-index:9000;width:60px;height:60px;border-radius:50%;border:0;color:#fff;background:linear-gradient(140deg,var(--dnc-purple) 0%,#5a43cf 55%,#3f2fa8 100%);box-shadow:0 10px 30px rgba(77,55,200,.42),inset 0 1px 0 rgba(255,255,255,.25);display:grid;place-items:center;cursor:pointer;transition:transform .2s,box-shadow .2s}
+.dnc-launcher:hover{transform:translateY(-2px) scale(1.03);box-shadow:0 14px 36px rgba(77,55,200,.5)}
+.dnc-launcher:focus-visible{outline:3px solid #a38aff;outline-offset:4px}
+.dnc-l-icon{grid-area:1/1;display:grid;place-items:center;transition:transform .25s,opacity .2s}
+.dnc-l-close{opacity:0;transform:rotate(-90deg) scale(.6)}
+.dnc.is-open .dnc-l-chat{opacity:0;transform:rotate(90deg) scale(.6)}.dnc.is-open .dnc-l-close{opacity:1;transform:none}
+.dnc-online{position:absolute;right:3px;top:3px;width:13px;height:13px;border-radius:50%;background:#2fd283;border:2.5px solid #fff}
+.dnc.is-open .dnc-online{display:none}
+.dnc-badge{position:absolute;left:-3px;top:-3px;min-width:21px;height:21px;padding:0 6px;border-radius:11px;background:#e0475f;color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
+.dnc-teaser{position:fixed;right:20px;bottom:92px;z-index:9000;max-width:270px;display:flex;align-items:flex-start;gap:6px;background:#fff;border:1px solid var(--dnc-line);border-radius:16px 16px 4px 16px;padding:13px 10px 13px 15px;box-shadow:0 14px 40px rgba(22,29,66,.16);animation:dncPop .35s ease-out}
+.dnc-teaser-text{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.4;color:var(--dnc-ink)}
+.dnc-teaser-text strong{font-weight:700}.dnc-teaser-text span{color:var(--dnc-muted);font-size:12px}
+.dnc-teaser-x{border:0;background:transparent;color:var(--dnc-muted);padding:2px;cursor:pointer;border-radius:6px;line-height:0}
+.dnc-teaser-x:hover{background:#f1f2f7}
+.dnc-panel{position:fixed;right:20px;bottom:92px;z-index:9001;width:384px;height:min(620px,calc(100vh - 120px));display:flex;flex-direction:column;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 24px 70px rgba(17,19,41,.28),0 0 0 1px rgba(17,19,41,.06);animation:dncUp .28s cubic-bezier(.2,.9,.3,1.1)}
+.dnc-panel[hidden]{display:none}
+.dnc-head{display:flex;align-items:center;gap:11px;padding:15px 14px 15px 16px;color:#fff;background:radial-gradient(120% 140% at 0% 0%,#3a2d8f 0%,transparent 55%),linear-gradient(135deg,#171a3a 0%,var(--dnc-navy) 100%)}
+.dnc-avatar{width:40px;height:40px;border-radius:12px;background:#fff;display:grid;place-items:center;flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.18)}
+.dnc-avatar img{width:28px;height:28px;object-fit:contain}
+.dnc-head-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.dnc-head-text strong{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.dnc-head-text small{font-size:11.5px;color:#c9c6ee;display:flex;align-items:center;gap:6px}
+.dnc-head-text small::before{content:"";width:7px;height:7px;border-radius:50%;background:#2fd283;box-shadow:0 0 0 3px rgba(47,210,131,.2)}
+.dnc-hbtn{width:34px;height:34px;border-radius:10px;border:0;background:rgba(255,255,255,.08);color:#fff;display:grid;place-items:center;cursor:pointer;flex:none;transition:background .15s;text-decoration:none}
+.dnc-hbtn:hover{background:rgba(255,255,255,.18)}
+.dnc-lang{font-size:11px;font-weight:700;letter-spacing:.04em}
+.dnc-body{flex:1;overflow-y:auto;padding:18px 16px 8px;background:linear-gradient(180deg,#f7f6ff 0%,#f6f7fb 100%);overscroll-behavior:contain}
+.dnc-welcome{animation:dncFade .3s}
+.dnc-hello{background:#fff;border:1px solid var(--dnc-line);border-radius:18px;padding:18px;box-shadow:0 4px 16px rgba(22,29,66,.04)}
+.dnc-wave{font-size:26px;display:inline-block;animation:dncWave 2.2s ease-in-out 1}
+.dnc-hello h3{margin:6px 0 6px;font-size:18px;letter-spacing:-.02em;color:var(--dnc-ink)}
+.dnc-hello p{margin:0;font-size:13px;line-height:1.55;color:var(--dnc-muted)}
+.dnc-choose{margin:18px 2px 10px;font-size:13px;font-weight:650;color:var(--dnc-ink)}.dnc-choose span{font-weight:500;color:var(--dnc-muted);font-size:12px}
+.dnc-langs{display:grid;gap:10px}
+.dnc-langbtn{display:flex;align-items:center;gap:12px;text-align:left;width:100%;padding:13px 14px;border-radius:14px;border:1.5px solid #ddd6fb;background:#fff;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s;color:var(--dnc-ink)}
+.dnc-langbtn:hover{border-color:var(--dnc-purple);transform:translateY(-1px);box-shadow:0 8px 20px rgba(109,85,223,.14)}
+.dnc-langbtn strong{display:block;font-size:14px}.dnc-langbtn small{display:block;font-size:12px;color:var(--dnc-muted);font-weight:500}
+.dnc-flag{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:12px;font-weight:800;color:var(--dnc-purple);background:#f0edff;flex:none}
+.dnc-list{display:flex;flex-direction:column;gap:9px}
+.dnc-msg{display:flex;flex-direction:column;max-width:84%;animation:dncFade .25s}
+.dnc-msg.bot,.dnc-msg.team{align-self:flex-start}.dnc-msg.me{align-self:flex-end;align-items:flex-end}
+.dnc-bubble{padding:10px 13px;border-radius:17px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+.dnc-msg.bot .dnc-bubble{background:#fff;color:var(--dnc-ink);border:1px solid var(--dnc-line);border-top-left-radius:5px;box-shadow:0 2px 8px rgba(22,29,66,.04)}
+.dnc-msg.team .dnc-bubble{background:#e9f7ef;color:#123a28;border:1px solid #c9ebd7;border-top-left-radius:5px}
+.dnc-msg.me .dnc-bubble{background:linear-gradient(135deg,var(--dnc-purple),#5a43cf);color:#fff;border-top-right-radius:5px}
+.dnc-msg.me.pending{opacity:.7}.dnc-msg.me.failed .dnc-bubble{background:#c4475d}
+.dnc-bubble a{color:var(--dnc-purple);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.dnc-msg.me .dnc-bubble a{color:#fff}
+.dnc-who{font-size:10.5px;font-weight:700;color:#1f7a50;margin:0 0 3px 4px}
+.dnc-time{font-size:10px;color:#9aa1b4;margin:3px 6px 0}
+.dnc-note{align-self:center;font-size:11.5px;color:var(--dnc-muted);background:#fff;border:1px dashed var(--dnc-line);border-radius:20px;padding:5px 12px;margin:4px 0}
+.dnc-typing{margin-top:9px}
+.dnc-typing .dnc-bubble{display:flex;gap:4px;padding:13px 15px}
+.dnc-typing span{width:7px;height:7px;border-radius:50%;background:#b3a6f3;animation:dncDot 1.2s infinite}
+.dnc-typing span:nth-child(2){animation-delay:.15s}.dnc-typing span:nth-child(3){animation-delay:.3s}
+.dnc-chips{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px}
+.dnc-chip{border:1.5px solid #d9d0fb;background:#fff;color:var(--dnc-purple);font-size:12.5px;font-weight:650;padding:7px 12px;border-radius:20px;cursor:pointer;transition:background .15s,border-color .15s}
+.dnc-chip:hover{background:#f0edff;border-color:var(--dnc-purple)}
+.dnc-error{margin:0 14px 8px;font-size:12px;color:#9b3047;background:#fdeef1;border:1px solid #f3cfd7;border-radius:10px;padding:8px 11px}
+.dnc-form{display:flex;align-items:flex-end;gap:8px;padding:10px 12px 8px;border-top:1px solid var(--dnc-line);background:#fff}
+.dnc-input{flex:1;resize:none;border:1.5px solid var(--dnc-line);border-radius:16px;padding:10px 13px;font:inherit;font-size:14px;line-height:1.4;max-height:120px;color:var(--dnc-ink);background:#fafbfe;outline:none;transition:border-color .15s,background .15s}
+.dnc-input:focus{border-color:var(--dnc-purple);background:#fff;outline:none}
+.dnc-input:disabled{background:#f3f4f8}
+.dnc-send{width:42px;height:42px;border-radius:14px;border:0;flex:none;color:#fff;background:linear-gradient(135deg,var(--dnc-purple),#5a43cf);display:grid;place-items:center;cursor:pointer;transition:transform .15s,opacity .15s}
+.dnc-send:hover:not(:disabled){transform:scale(1.05)}.dnc-send:disabled{opacity:.4;cursor:not-allowed}
+.dnc-foot{display:flex;justify-content:space-between;gap:10px;padding:0 16px 10px;background:#fff;font-size:10.5px;color:#9aa1b4}
+.dnc-foot a{color:#9aa1b4;text-decoration:underline}
+@keyframes dncUp{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes dncPop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes dncFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes dncDot{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-4px);opacity:1}}
+@keyframes dncWave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(16deg)}40%,80%{transform:rotate(-8deg)}}
+@media (max-width:600px){
+  .dnc-launcher{right:14px;bottom:14px;width:56px;height:56px}
+  .dnc-teaser{right:14px;bottom:80px;max-width:calc(100vw - 28px)}
+  .dnc-panel{inset:0;width:100%;height:100%;height:100dvh;border-radius:0;bottom:0;right:0}
+  .dnc-head{padding-top:max(14px,env(safe-area-inset-top))}
+  .dnc-foot{padding-bottom:max(10px,env(safe-area-inset-bottom))}
+  .dnc.is-open .dnc-launcher{display:none}
+  .dnc-input{font-size:16px}
+  .dnc-msg{max-width:88%}
+}
+html.dnc-lock,html.dnc-lock body{overflow:hidden}
+@media (prefers-reduced-motion:reduce){.dnc *{animation:none!important;transition:none!important}}
+@media print{.dnc{display:none!important}}

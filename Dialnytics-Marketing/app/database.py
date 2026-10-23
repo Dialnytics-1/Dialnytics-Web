@@ -60,6 +60,35 @@ class RateBucket(Base):
     count: Mapped[int]=mapped_column(Integer,default=1)
     expires_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True)
 
+class ChatConversation(Base):
+    """One website-chat visitor or one WhatsApp number."""
+    __tablename__='mkt_chat_conversations'
+    id: Mapped[str]=mapped_column(String(36),primary_key=True)
+    channel: Mapped[str]=mapped_column(String(12),index=True)          # web | whatsapp
+    contact_key: Mapped[str]=mapped_column(String(90),unique=True)     # wa:+447... | web:<hash>
+    phone: Mapped[str]=mapped_column(String(40),default='')
+    display_name: Mapped[str]=mapped_column(String(150),default='')
+    language: Mapped[str]=mapped_column(String(8),default='')
+    ai_enabled: Mapped[bool]=mapped_column(Boolean,default=True)
+    needs_human: Mapped[bool]=mapped_column(Boolean,default=False)
+    unread: Mapped[int]=mapped_column(Integer,default=0)
+    ai_replies: Mapped[int]=mapped_column(Integer,default=0)
+    lead: Mapped[dict]=mapped_column(JSON,default=dict)
+    lead_id: Mapped[str | None]=mapped_column(ForeignKey('mkt_submissions.id',ondelete='SET NULL'),nullable=True,index=True)
+    last_preview: Mapped[str]=mapped_column(String(200),default='')
+    last_inbound_at: Mapped[datetime | None]=mapped_column(DateTime(timezone=True),nullable=True)
+    last_message_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now,index=True)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+class ChatMessage(Base):
+    __tablename__='mkt_chat_messages'
+    id: Mapped[int]=mapped_column(Integer,primary_key=True,autoincrement=True)
+    conversation_id: Mapped[str]=mapped_column(ForeignKey('mkt_chat_conversations.id',ondelete='CASCADE'),index=True)
+    role: Mapped[str]=mapped_column(String(12))                         # user | assistant | admin | system
+    body: Mapped[str]=mapped_column(Text,default='')
+    provider_id: Mapped[str | None]=mapped_column(String(100),unique=True,nullable=True)
+    status: Mapped[str]=mapped_column(String(20),default='')
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now,index=True)
+
 def make_database(url):
     if url.startswith('postgres://'): url=url.replace('postgres://','postgresql+psycopg://',1)
     elif url.startswith('postgresql://'): url=url.replace('postgresql://','postgresql+psycopg://',1)

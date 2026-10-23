@@ -1,0 +1,37 @@
+{% extends 'admin_base.html' %}{% from 'macros.html' import icon %}{% block content %}
+<div class="admin-heading"><div><span class="eyebrow">AI ASSISTANT &middot; WEBSITE + WHATSAPP</span><h1>Customer chats.</h1><p>Every conversation with the AI assistant. Switch AI off for any chat and reply yourself.</p></div><a href="/admin?kind=chat" class="button secondary">AI chat leads {{ icon('arrow') }}</a></div>
+{% if not ai_ready %}<div class="warning-box"><strong>AI is not connected.</strong> Add ANTHROPIC_API_KEY in Render &rarr; Environment. Until then customers get a short "our team will reply" message.</div>{% endif %}
+{% if not whatsapp_ready %}<div class="warning-box"><strong>WhatsApp is not connected yet.</strong> Website chat works now. Add TELNYX_API_KEY and TELNYX_PUBLIC_KEY in Render to switch on WhatsApp.</div>{% elif not alerts_ready %}<div class="info-notice">Add ADMIN_WHATSAPP_NUMBER in Render to get a WhatsApp alert for every new lead.</div>{% endif %}
+{% if request.query_params.get('deleted') %}<div class="success-banner" role="status">Chat deleted.</div>{% endif %}
+<div class="admin-stats chat-stats">
+  <a href="/admin/chats"><span>All chats</span><strong>{{ stats.total }}</strong></a>
+  <a href="/admin/chats?view=unread"><span>Unread</span><strong>{{ stats.unread }}</strong></a>
+  <a href="/admin/chats?view=human"><span>Needs you</span><strong>{{ stats.human }}</strong></a>
+  <a href="/admin/chats?view=ai_on"><span>AI on</span><strong>{{ stats.ai_on }}</strong></a>
+  <a href="/admin/chats?view=leads"><span>Leads captured</span><strong>{{ stats.leads }}</strong></a>
+</div>
+<form class="admin-filters card" method="get" action="/admin/chats">
+  <div><label for="chat-search">Search</label><input id="chat-search" name="q" value="{{ q }}" placeholder="Name, number or message" maxlength="100"></div>
+  <div><label for="chat-channel">Channel</label><select id="chat-channel" name="channel"><option value="">Website + WhatsApp</option><option value="web" {% if channel=='web' %}selected{% endif %}>Website chat</option><option value="whatsapp" {% if channel=='whatsapp' %}selected{% endif %}>WhatsApp</option></select></div>
+  <div><label for="chat-view">Show</label><select id="chat-view" name="view"><option value="">All chats</option>{% for k,l in [('unread','Unread'),('human','Needs you'),('ai_on','AI on'),('ai_off','AI off'),('leads','Leads captured')] %}<option value="{{ k }}" {% if view==k %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <button class="button" type="submit">Apply</button><a class="text-link" href="/admin/chats">Reset</a>
+</form>
+<section class="card chat-list-card" data-chat-list>
+  <div class="table-top"><h2>Conversations <span class="count-badge">{{ rows|length }}</span></h2><span>Updates automatically</span></div>
+  {% for c in rows %}
+  <a class="chat-row{% if c.unread %} is-unread{% endif %}" href="/admin/chats/{{ c.id }}">
+    <span class="chat-avatar {{ c.channel }}">{{ (c.display_name or c.phone or 'W')[:1]|upper }}</span>
+    <span class="chat-row-main">
+      <span class="chat-row-top"><strong>{{ c.display_name or c.phone or 'Website visitor' }}</strong><span class="channel-tag {{ c.channel }}">{{ 'WhatsApp' if c.channel=='whatsapp' else 'Website' }}</span>{% if c.display_name and c.phone %}<small>{{ c.phone }}</small>{% endif %}</span>
+      <span class="chat-preview">{{ c.last_preview or 'No messages yet' }}</span>
+    </span>
+    <span class="chat-row-side">
+      <small>{{ c.last_message_at|stamp }}</small>
+      <span class="chat-pills">{% if c.needs_human %}<span class="pill-human">Needs you</span>{% endif %}{% if c.lead_id %}<span class="pill-lead">Lead</span>{% endif %}<span class="pill-ai {{ 'on' if c.ai_enabled else 'off' }}">AI {{ 'ON' if c.ai_enabled else 'OFF' }}</span>{% if c.unread %}<span class="pill-unread">{{ c.unread }}</span>{% endif %}</span>
+    </span>
+  </a>
+  {% else %}
+  <div class="admin-empty">{{ icon('mail') }}<h3>No chats yet.</h3><p>When a visitor uses the website chat or messages your WhatsApp number, the conversation appears here.</p></div>
+  {% endfor %}
+</section>
+{% endblock %}
