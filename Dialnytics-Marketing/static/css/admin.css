@@ -49,3 +49,4 @@
 .button.full{width:100%}
 @media(max-width:1050px){.chat-detail-grid{grid-template-columns:minmax(0,1fr) 290px}}
 @media(max-width:760px){.chat-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.chat-detail-grid{grid-template-columns:1fr}.chat-detail-grid aside{order:2}.chat-row{grid-template-columns:38px minmax(0,1fr);padding:14px 16px;gap:12px}.chat-avatar{width:38px;height:38px;font-size:14px}.chat-row-side{grid-column:2;flex-direction:row;justify-content:space-between;align-items:center}.chat-thread{height:58vh;padding:16px}.bubble{max-width:88%}.chat-reply-bar{flex-direction:column;align-items:stretch}}
+.wa-link{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 22px;margin-bottom:18px}.wa-link strong{display:block;font-size:14px}.wa-link small{font-size:11px;color:var(--muted)}@media(max-width:760px){.wa-link{flex-direction:column;align-items:stretch}}

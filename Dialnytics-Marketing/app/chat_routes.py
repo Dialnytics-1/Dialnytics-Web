@@ -1,5 +1,6 @@
 """Website chat widget API, Telnyx WhatsApp webhook and the admin Chats inbox."""
 import json, logging, secrets, threading, time, uuid
+from urllib.parse import urlencode
 from collections import defaultdict
 from datetime import timedelta, timezone
 from fastapi import Request, HTTPException, Form, BackgroundTasks
@@ -340,7 +341,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         return render(request, 'admin_chats.html', {'page_title': 'Chats', 'admin': sess, 'rows': rows, 'stats': stats,
                       'channel': channel, 'view': view, 'q': q, 'mail_ready': settings.mail_ready,
                       'ai_ready': settings.ai_ready, 'whatsapp_ready': settings.whatsapp_ready,
-                      'alerts_ready': bool(settings.whatsapp_ready and settings.admin_whatsapp)})
+                      'alerts_ready': bool(settings.whatsapp_ready and settings.admin_whatsapp),
+                      'profile_ready': bool(settings.telnyx_key and settings.wa_profile_id)})
 
     @app.get('/admin/chats/badge.json')
     def chats_badge(request: Request):
@@ -348,6 +350,13 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         with DB() as db:
             unread = db.scalar(select(func.count()).select_from(ChatConversation).where(or_(ChatConversation.unread > 0, ChatConversation.needs_human.is_(True))))
         return {'unread': unread}
+
+    @app.post('/admin/whatsapp/link')
+    def whatsapp_link(request: Request, csrf: str = Form(...)):
+        sess = admin_required(request, csrf)
+        ok, message = bot.link_whatsapp_profile(settings)
+        with DB.begin() as db: audit(db, sess, 'WhatsApp profile link: ' + ('ok' if ok else 'failed'))
+        return RedirectResponse('/admin/chats?' + urlencode({'link': 'ok' if ok else 'fail', 'msg': message[:250]}), status_code=303)
 
     @app.get('/admin/chats/{conv_id}', response_class=HTMLResponse)
     def chat_detail(request: Request, conv_id: str):

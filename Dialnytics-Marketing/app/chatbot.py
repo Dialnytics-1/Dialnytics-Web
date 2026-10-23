@@ -1,6 +1,6 @@
 """Dialnytics AI customer-service assistant: knowledge, Claude API calls, lead fields,
 and Telnyx WhatsApp helpers. No database code here (see chat_routes.py)."""
-import base64, json, logging, re, time, uuid, urllib.request, urllib.error
+import base64, json, logging, re, time, uuid, urllib.request, urllib.error, urllib.parse
 from dataclasses import dataclass, field
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
@@ -309,6 +309,30 @@ def send_whatsapp_template(settings, to, name, lang, params):
         'name': name, 'language': {'code': lang, 'policy': 'deterministic'},
         'components': [{'type': 'body', 'parameters': [{'type': 'text', 'text': p} for p in params]}]}}
     return _telnyx_post(settings, payload)
+
+def link_whatsapp_profile(settings):
+    """Assign the WhatsApp number to the messaging profile so inbound messages reach our webhook.
+    Returns (ok, message)."""
+    if not (settings.telnyx_key and settings.wa_profile_id and settings.wa_from):
+        return False, 'Add TELNYX_API_KEY, TELNYX_MESSAGING_PROFILE_ID and WHATSAPP_FROM_NUMBER in Render first.'
+    number = normalize_phone(settings.wa_from)
+    if not number: return False, 'WHATSAPP_FROM_NUMBER is not a valid international number.'
+    url = 'https://api.telnyx.com/v2/whatsapp/phone_numbers/' + urllib.parse.quote(number, safe='') + '/profile'
+    req = urllib.request.Request(url, data=json.dumps({'profile_id': settings.wa_profile_id}).encode(), method='PATCH',
+                                 headers={'Authorization': 'Bearer ' + settings.telnyx_key,
+                                          'Content-Type': 'application/json', 'Accept': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            res.read()
+        return True, f'{number} is now linked to messaging profile {settings.wa_profile_id}.'
+    except urllib.error.HTTPError as exc:
+        detail = exc.read()[:300].decode('utf-8', 'replace')
+        log.warning('WhatsApp profile link HTTP %s: %s', exc.code, detail)
+        try: detail = '; '.join(e.get('detail') or e.get('title', '') for e in json.loads(detail).get('errors', [])) or detail
+        except (ValueError, AttributeError): pass
+        return False, f'Telnyx refused (HTTP {exc.code}): {detail[:200]}'
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return False, 'Could not reach Telnyx: ' + type(exc).__name__
 
 def template_safe(text: str) -> str:
     """Meta template parameters cannot contain new lines, tabs or 4+ spaces."""
