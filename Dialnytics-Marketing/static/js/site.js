@@ -59,7 +59,10 @@
   const elements = document.querySelectorAll(
     '.section-heading, .feature-card, .plan-card, ' +
     '.price-teaser, .country-card, .collection-card, ' +
-    '.workflow-points > div, .closing-cta'
+    '.workflow-points > div, .closing-cta, ' +
+    '.value-ribbon .container > div, .steps-grid > *, .solution-feature-grid > a, ' +
+    '.queue-illustration, .faq-list details, .tour-panel:not([hidden]), .form-card, .contact-aside, ' +
+    '.calculator, .comparison-table-wrap, .country-price-panel, .article-section, .section-tail'
   );
 
   const observer = new IntersectionObserver((entries, obs) => {
@@ -75,6 +78,10 @@
   });
 
   elements.forEach(element => {
+    // Stagger siblings slightly so grids cascade in.
+    const siblings = element.parentElement ? Array.from(element.parentElement.children) : [];
+    const index = Math.max(0, siblings.indexOf(element));
+    element.style.setProperty('--reveal-delay', (index % 4) * 90 + 'ms');
     element.classList.add('scroll-reveal');
     observer.observe(element);
   });
