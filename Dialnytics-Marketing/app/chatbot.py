@@ -84,7 +84,8 @@ def knowledge(base_url: str) -> str:
         f"SUPPORT HOURS: {BUSINESS['support_hours']}. Activation is 24/7, separate from support hours.",
         f"EXISTING CUSTOMERS sign in at {BUSINESS['dialer_url']} (Client Login).",
         f"CONTACT: WhatsApp {BUSINESS['phone_display']}, email {BUSINESS['email']}. Operated by "
-        f"{BUSINESS['legal_name']} (UK company {BUSINESS['company_number']}).",
+        f"{BUSINESS['legal_name']} (UK company {BUSINESS['company_number']}). Registered office: {BUSINESS['address']} "
+        "(registered office only, not a walk-in support location; support is online via WhatsApp/email).",
         'REFUNDS: final written refund/cancellation terms are provided by the team before payment; do not promise refunds.',
         'NOT CONFIRMED IN CHAT: SMS, voicemail, AI transcripts/live captions, discounts, minimum contracts, '
         'specific number availability. For these say the team will confirm.',
