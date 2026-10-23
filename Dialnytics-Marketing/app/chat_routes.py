@@ -70,7 +70,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         if lead.get('name'): conv.display_name = str(lead['name'])[:150]
         details = {'channel': CHANNEL_NAMES.get(conv.channel, conv.channel),
                    'calling_country': lead.get('calling_country', ''), 'users': lead.get('users', ''),
-                   'plan_interest': lead.get('plan_interest', ''), 'language': LANG_NAMES.get(conv.language, ''),
+                   'plan_interest': lead.get('plan_interest', ''), 'campaign_name': lead.get('campaign_name', ''),
+                   'request': bot.REQUESTS.get(lead.get('request', ''), ''), 'language': LANG_NAMES.get(conv.language, ''),
                    'conversation_id': conv.id}
         row = db.get(Submission, conv.lead_id) if conv.lead_id else None
         if row:
@@ -85,8 +86,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
                          idempotency_key=conv.id if not db.scalar(select(Submission.id).where(Submission.idempotency_key == conv.id)) else str(uuid.uuid4()),
                          payload_hash=sha(json.dumps(lead, sort_keys=True, default=str)), kind='chat',
                          name=str(lead['name'])[:150], email=str(lead.get('email') or '')[:254],
-                         phone=str(lead['whatsapp'])[:40], company=str(lead['company'])[:200],
-                         subject=CHANNEL_NAMES.get(conv.channel, 'Chat') + ' lead', message=str(lead.get('notes') or '')[:5000],
+                         phone=str(lead['whatsapp'])[:40], company=str(lead.get('company') or '')[:200],
+                         subject=(bot.REQUESTS.get(lead.get('request', ''), 'Lead')) + ' - ' + CHANNEL_NAMES.get(conv.channel, 'Chat'), message=str(lead.get('notes') or '')[:5000],
                          details=details, status='new')
         db.add(row); db.flush()
         db.add(MailJob(id=str(uuid.uuid4()), submission_id=row.id))
@@ -113,8 +114,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
     def alert_new_lead(info):
         lead = info['lead']
         lines = ['🔔 New Dialnytics lead (' + CHANNEL_NAMES.get(info['channel'], '') + ')', 'Ref: ' + info['reference']]
-        lines += [f"{bot.FIELD_LABELS[k]}: {lead[k]}" for k in ('name', 'company', 'whatsapp', 'calling_country', 'users', 'email')
-                  if lead.get(k) not in (None, '')]
+        lines += [f"{bot.FIELD_LABELS[k]}: {bot.REQUESTS.get(lead[k], lead[k]) if k == 'request' else lead[k]}"
+                  for k in bot.ORDER if k != 'plan_interest' and lead.get(k) not in (None, '')]
         lines.append(info['link'])
         alert_async(lines, info['reference'] + ' | ' + info['summary'] + ' | ' + info['link'])
 
@@ -371,7 +372,7 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
             lead_row = db.get(Submission, conv.lead_id) if conv.lead_id else None
             lead_ref = lead_row.reference if lead_row else ''
         lead = dict(conv.lead or {})
-        fields = [(bot.FIELD_LABELS[k], lead.get(k, '')) for k in ('name', 'company', 'whatsapp', 'calling_country', 'users', 'email', 'plan_interest', 'notes')]
+        fields = [(bot.FIELD_LABELS[k], bot.REQUESTS.get(lead.get(k, ''), lead.get(k, '')) if k == 'request' else lead.get(k, '')) for k in bot.ORDER]
         return render(request, 'admin_chat_detail.html', {'page_title': conv.display_name or conv.phone or 'Website visitor', 'admin': sess,
                       'conv': conv, 'messages': messages, 'fields': fields, 'missing': [bot.FIELD_LABELS[f] for f in bot.missing_fields(lead)],
                       'lead_ref': lead_ref, 'lang_name': LANG_NAMES.get(conv.language, 'Not chosen yet'),

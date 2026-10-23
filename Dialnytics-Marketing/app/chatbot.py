@@ -9,10 +9,13 @@ from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote
 log = logging.getLogger('dialnytics.chatbot')
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 TELNYX_WA_URL = 'https://api.telnyx.com/v2/messages/whatsapp'
-REQUIRED_FIELDS = ('name', 'whatsapp', 'company', 'calling_country', 'users')
+REQUIRED_FIELDS = ('name', 'email', 'whatsapp', 'campaign_name')  # what the team needs to create the account
+ORDER = ('request', 'name', 'email', 'whatsapp', 'campaign_name', 'company', 'calling_country', 'users', 'plan_interest', 'notes')
+REQUESTS = {'purchase': 'Wants to buy', 'info': 'Enquiry'}
 FIELD_LABELS = {'name': 'Name', 'whatsapp': 'WhatsApp number', 'company': 'Company name',
                 'calling_country': 'Calling country', 'users': 'Users needed', 'email': 'Email',
-                'plan_interest': 'Plan interest', 'notes': 'Notes'}
+                'plan_interest': 'Plan interest', 'notes': 'Notes',
+                'campaign_name': 'Campaign name', 'request': 'Request'}
 
 # ---------------------------------------------------------------- fixed texts
 LANG_MENU = ("Welcome to Dialnytics! 👋\nPlease choose your language:\n1. English\n2. Roman Urdu\n\n"
@@ -78,8 +81,10 @@ def knowledge(base_url: str) -> str:
         '-> payment -> account activated 24/7 within 10-15 minutes after payment confirmation -> login details sent.',
         'PAYMENT: Bank Transfer, USDT, or Credit/Debit card via a secure Stripe link. The team sends payment '
         'instructions on WhatsApp. The website/chat never takes payment.',
-        'FREE TRIAL: not offered. Instead, show the product tour: ' + base_url + '/product/tour/ '
-        '(a complete walkthrough of the dialer in under 5 minutes).',
+        'DEMO ACCOUNT / FREE TRIAL: NOT available. Instead offer the product tour: ' + base_url + '/product/tour/ '
+        '(full walkthrough of the dialer in under 5 minutes) and answer their questions.',
+        'TO BUY: the customer shares Full Name, Email Address, Phone Number and Campaign Name; once these are received '
+        'and payment is confirmed, the account is activated within 10-15 minutes.',
         'NUMBERS: a dedicated caller ID is included; the team confirms availability of a preferred country/area '
         'before payment. A chat does not reserve a number.',
         f"SUPPORT HOURS: {BUSINESS['support_hours']}. Activation is 24/7, separate from support hours.",
@@ -107,6 +112,9 @@ def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str
                     if channel == 'whatsapp' else
                     "This chat is the WEBSITE chat widget. Plain text only: no markdown, no **, no #, no tables. "
                     "Keep replies short (1-5 short lines). When they are interested, naturally ask for their WhatsApp number with country code so the team can send number options.")
+    wa_phone_line = ('\n   On WhatsApp write "Phone Number (agar yahi WhatsApp number hai to bas same likh dein)". '
+                     'If they say same, the known WhatsApp number is their phone; do not ask for it again.'
+                     if channel == 'whatsapp' else '')
     return f"""You are the Dialnytics virtual assistant, chatting with potential customers for Dialnytics, a business calling platform (browser dialer with dedicated caller ID, unlimited calling, CRM, Power Dialer and call recording). Talk like an experienced, friendly sales person from the team: relaxed, helpful, human. Never like a form or a bot.
 
 LANGUAGE: {lang_rule}
@@ -116,7 +124,7 @@ HOW TO TALK (most important):
 - First HELP, then ask. Always answer what the customer actually said, using every detail they gave. Example: they say "UK ke liye 3 dialer chahiye" -> confirm and quote right away: "Ji bilkul! UK plan $29 per user/month hai, to 3 users ka total $87/month banega. Is mein unlimited UK calling, apna UK number, CRM, Power Dialer aur call recording sab included hai, koi setup fee nahi." Then ONE easy follow-up question.
 - Never ignore their message to ask for data. Never ask for name and company together. Never say things like "taake hum details save kar sakein" or "please provide your details".
 - Ask only ONE short question per message, and only when it fits the flow. Good natural questions: "Aap ki team kahan se kaam karti hai?", "Kab tak start karna chahte hain?", "Waise main aap ko kis naam se address karun?", "Aap ki company ka naam kya hai, taake team number setup ke liye ready rakhe?"
-- Details to learn naturally over the conversation (not all at once, not in a fixed order, skip what they already told you): name, company name, calling country, number of users{', WhatsApp number with country code' if channel != 'whatsapp' else ''}, email (optional, ask at most once near the end). If the customer is just exploring or asks something else, answer and do not push for details.
+- Useful to learn naturally during normal chat (one at a time, skip what they told you): name, calling country, number of users, company. If the customer is just exploring, answer and do not push. The full account details (name, email, phone, campaign name) are collected with the checklist in step 4.
 - On a simple greeting ("Hi", "Salam"), greet back warmly and ask how you can help (e.g. "Walaikum Assalam! Bataiye, main kaise madad kar sakta hoon?"). Do not immediately ask which country.
 - Match their energy and length. Short, warm sentences. Vary your wording; do not repeat the same opener. A light emoji now and then is fine, not in every message.
 - If a message is unclear (e.g. just "?"), look at the earlier messages and answer what they most likely meant (often: they are waiting for an answer to their last question).
@@ -126,9 +134,21 @@ WHAT YOU DO:
 1. Answer accurately using ONLY the knowledge below. Never invent prices, discounts, trials, features, refund terms, timelines or number availability. If something is not in the knowledge, say the team will confirm it.
 2. Quote the correct monthly total whenever you know the plan and user count (compute it from the price rules).
 3. Call the save_lead tool whenever the customer shares any of these details (you may call it several times). ALWAYS write your reply to the customer in the SAME response as the tool call. Never mention saving or the tool.
-4. Once you know name, company, calling country and users{', and WhatsApp number' if channel != 'whatsapp' else ''}, tell them warmly that the team will message them on WhatsApp with number options and payment details, and activation takes 10-15 minutes after payment confirmation.
-5. Demo or trial requests: there is no free trial; share the product tour {base_url}/product/tour/ (a full walkthrough of the dialer) and offer to answer questions.
-6. If the customer asks for a human, is upset, has an account/technical problem you cannot solve, or wants something not covered, call request_human and tell them the team will reply here (mention support hours if outside them).
+4. READY TO BUY: use your judgement. Send the checklist as soon as the customer clearly SHOWS they want to buy, even if they never say the word "purchase". Buying signals: "ok le leta hoon", "theek hai done", "kaise start karein?", "payment kaise karun?", "account bana do", "number kab milega?", "kitni der mein active hoga?", agreeing after you quote a price, or confirming a plan and user count. NOT buying signals yet: only asking prices, comparing plans, asking features, "sochta hoon", "baad mein batata hoon" - then just help and do not send the list. Do not send the checklist twice; if some details are still missing later, ask only for those, briefly.
+   When ready, send the team's standard checklist in ONE message (this is the one time a list of details is fine), in the customer's language style, listing ONLY what you do not know yet. English example:
+   "Sure! To create your account, please share the following details:
+   - Full Name
+   - Email Address
+   - Phone Number
+   - Campaign Name
+   Once I receive these details and your payment is confirmed, your account will be activated within 10-15 minutes."
+   Roman Urdu/mix example: "Ji zaroor! Account create karne ke liye ye details share kar dein: ... Ye details milne aur payment confirm hone ke baad aap ka account 10-15 minute mein activate ho jayega."{wa_phone_line}
+   Campaign Name = the name they want for their calling campaign/account (often their business or project name). If they are unsure, suggest using their company name.
+   Set request to purchase in save_lead.
+5. When name, email, phone and campaign name are known, confirm warmly: the team will message them on WhatsApp with the payment details, and the account is activated within 10-15 minutes after payment confirmation. Do not ask for anything else after that unless they want to continue.
+   DEMO ACCOUNT / FREE TRIAL requests: politely say it is not available, share the product tour, and offer to answer any question; if they then want to buy, use step 4.
+6. Also share the product tour {base_url}/product/tour/ when they want to see how it works.
+7. If the customer asks for a human, is upset, has an account/technical problem you cannot solve, or wants something not covered, call request_human and tell them the team will reply here (mention support hours if outside them).
 
 RULES:
 - Never mention telecom carriers, underlying providers or technology vendors, and never name the AI company or model behind you. If asked whether you are a bot, honestly say you are Dialnytics' AI assistant and a human from the team can join any time.
@@ -153,6 +173,8 @@ TOOLS = [
          'users': {'type': 'integer', 'description': 'Number of users (agents) needed'},
          'email': {'type': 'string', 'description': 'Email address (optional)'},
          'plan_interest': {'type': 'string', 'description': 'Plan they are interested in, if clear'},
+         'campaign_name': {'type': 'string', 'description': 'Campaign name for their account'},
+         'request': {'type': 'string', 'enum': ['purchase', 'info'], 'description': 'What they want'},
          'notes': {'type': 'string', 'description': 'One short line about their needs or use case'}},
          'additionalProperties': False}},
     {'name': 'request_human',
@@ -171,9 +193,10 @@ def normalize_phone(value: str):
 def clean_lead(data: dict):
     """Validate a save_lead tool input. Returns (updates, errors)."""
     updates, errors = {}, []
-    for key in ('name', 'company', 'calling_country', 'plan_interest', 'notes'):
+    for key in ('name', 'company', 'calling_country', 'plan_interest', 'notes', 'campaign_name'):
         if key in data and str(data[key]).strip():
             updates[key] = re.sub(r'[\x00-\x1f]', ' ', str(data[key])).strip()[:150 if key != 'notes' else 400]
+    if data.get('request') in REQUESTS: updates['request'] = data['request']
     if data.get('whatsapp'):
         phone = normalize_phone(data['whatsapp'])
         if phone: updates['whatsapp'] = phone
@@ -431,6 +454,6 @@ def parse_whatsapp_event(data: dict) -> dict:
     return {'kind': 'ignore'}
 
 def lead_summary(lead: dict, channel: str) -> str:
-    parts = [f"{FIELD_LABELS[k]}: {lead[k]}" for k in ('name', 'company', 'whatsapp', 'calling_country', 'users', 'email')
-             if lead.get(k) not in (None, '')]
+    parts = [f"{FIELD_LABELS[k]}: {REQUESTS.get(lead[k], lead[k]) if k == 'request' else lead[k]}"
+             for k in ORDER if k not in ('notes', 'plan_interest') and lead.get(k) not in (None, '')]
     return ('Website chat' if channel == 'web' else 'WhatsApp') + ' | ' + ' | '.join(parts)
