@@ -15,7 +15,7 @@ from . import chatbot as bot
 log = logging.getLogger('dialnytics.chat')
 MAX_AI_REPLIES = 60          # per conversation, then the team takes over
 MAX_USER_MESSAGES = 150      # per website conversation
-WA_DEBOUNCE_SECONDS = 3.0    # wait for a customer who sends several short messages
+WA_DEBOUNCE_SECONDS = 1.2    # wait for a customer who sends several short messages
 WINDOW = timedelta(hours=24) # WhatsApp customer-service window
 LANG_NAMES = {'en': 'English', 'ur': 'Roman Urdu'}
 CHANNEL_NAMES = {'web': 'Website chat', 'whatsapp': 'WhatsApp'}
@@ -139,17 +139,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
                 phone, who = conv.phone, conv.display_name or conv.phone or 'Website visitor'
             last_text = next((b for r, b in reversed(rows) if r == 'user'), '')
             replies, result, disable_ai, human_reason = [], bot.AIResult(), False, ''
-            if not language:
-                choice = bot.language_choice(last_text)
-                if choice:
-                    language = choice
-                    # Answer an earlier question in the chosen language; otherwise just greet.
-                    if not any(r == 'user' for r, _ in rows[:-1]):
-                        replies = [bot.GREETING[choice]]
-                elif not any(r == 'assistant' and b == bot.LANG_MENU for r, b in rows):
-                    replies = [bot.LANG_MENU]
-                else:
-                    language = bot.guess_language(last_text)
+            # No language menu: the assistant mirrors the customer's own style (English / Roman Urdu mix).
+            language = bot.guess_language(last_text)
             if not replies:
                 if ai_count >= MAX_AI_REPLIES:
                     replies = [bot.LIMIT_REACHED[language]]; disable_ai = True; human_reason = 'AI reply limit reached'
@@ -176,7 +167,7 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
             with DB.begin() as db:
                 conv = db.get(ChatConversation, conv_id)
                 if not conv: return []
-                if language and not conv.language: conv.language = language
+                if language: conv.language = language
                 if result.lead_updates or (channel == 'whatsapp' and not (conv.lead or {}).get('whatsapp')):
                     new_lead = apply_lead(db, conv, result.lead_updates)
                 notify_human = bool(human_reason) and not conv.needs_human
@@ -249,9 +240,17 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         require_public_csrf(request)
         if not settings.chat_enabled: raise HTTPException(404, 'Chat is not available.')
         rate_limit(request, 'chat', 40, 3600)
+        with DB() as db:
+            exists = web_conversation(db, request) is not None
+        if not exists: rate_limit(request, 'chatnew', 10, 3600)
+        new_cookie = None
         with DB.begin() as db:
             conv = web_conversation(db, request)
-            if not conv: raise HTTPException(409, 'Please choose a language to start the chat.')
+            if not conv:
+                new_cookie = secrets.token_urlsafe(32)
+                conv = ChatConversation(id=str(uuid.uuid4()), channel='web', contact_key='web:' + sha(new_cookie),
+                                        language='', ai_enabled=True, lead={}, created_at=now(), last_message_at=now())
+                db.add(conv); db.flush()
             count = db.scalar(select(func.count()).select_from(ChatMessage).where(ChatMessage.conversation_id == conv.id, ChatMessage.role == 'user'))
             if count >= MAX_USER_MESSAGES: raise HTTPException(429, 'This chat is very long. Please continue with us on WhatsApp.')
             msg = add_message(db, conv, 'user', data.text)
@@ -259,7 +258,10 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
             conv_id, msg_id, ai_on = conv.id, msg.id, bool(conv.ai_enabled)
             mine = public_message(msg)
         replies = process_ai(conv_id, msg_id) if ai_on else []
-        return {'messages': [mine] + replies, 'ai': ai_on, 'waiting': not ai_on}
+        res = JSONResponse({'messages': [mine] + replies, 'ai': ai_on, 'waiting': not ai_on})
+        if new_cookie:
+            res.set_cookie('mkt_chat', new_cookie, max_age=60 * 60 * 24 * 30, httponly=True, secure=settings.production, samesite='lax')
+        return res
 
     # ------------------------------------------------------------ WhatsApp webhook (Telnyx)
     @app.post('/webhooks/telnyx/whatsapp')

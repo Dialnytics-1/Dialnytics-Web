@@ -44,7 +44,8 @@ def language_choice(text: str):
 
 _UR_WORDS = {'kya', 'hai', 'hain', 'ka', 'ki', 'ke', 'mujhe', 'mujhy', 'chahiye', 'chahye', 'kitne', 'kitny',
              'aap', 'ap', 'kaise', 'kese', 'krna', 'karna', 'kr', 'nahi', 'ni', 'haan', 'han', 'acha', 'theek',
-             'bhai', 'salam', 'assalam', 'kitna', 'kab', 'kahan', 'kyun', 'mein', 'mai', 'hum', 'tum', 'batao'}
+             'bhai', 'salam', 'assalam', 'kitna', 'kab', 'kahan', 'kyun', 'mein', 'mai', 'hum', 'tum', 'batao',
+             'liye', 'mujy', 'mjhe', 'rha', 'raha', 'kro', 'karo', 'hy', 'chahte', 'chahta', 'bata', 'dein', 'krna', 'krein'}
 
 def guess_language(text: str) -> str:
     words = set(re.findall(r'[a-z]+', (text or '').lower()))
@@ -93,9 +94,12 @@ def knowledge(base_url: str) -> str:
     return '\n'.join(lines)
 
 def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str:
-    lang_rule = ("Reply in ROMAN URDU (Urdu written with English letters, e.g. 'Aap kitne users chahte hain?'). "
-                 "Never use Urdu/Arabic script. Common English words (plan, users, number, price) are fine."
-                 if language == 'ur' else "Reply in clear, simple English.")
+    lang_rule = ("Do NOT ask which language they prefer. Mirror the customer's own style in every reply: "
+                 "if they write in English, reply in clear simple English; if they write in Roman Urdu or a mix of "
+                 "Roman Urdu and English (the normal Pakistani chat style, e.g. 'Han mujhe Japan ke liye 2 user ka dialer chahiye'), "
+                 "reply in the same natural mix, e.g. 'Ji bilkul! Japan plan $64 per user/month hai, to 2 users ka total "
+                 "$128/month banega. Aap ka naam kya hai?'. Keep business words (plan, users, price, number, setup) in English. "
+                 "Never use Urdu/Arabic script. Use 'aap', polite and friendly. If they greet with Salam, reply Walaikum Assalam.")
     have = {k: v for k, v in (lead or {}).items() if v not in (None, '')}
     missing = [FIELD_LABELS[f] for f in REQUIRED_FIELDS if f not in have]
     channel_rule = ("This chat is on WHATSAPP. The customer's WhatsApp number is already known; do not ask for it. "
@@ -105,14 +109,14 @@ def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str
                     "Keep replies short (1-5 short lines). Ask for their WhatsApp number with country code.")
     return f"""You are the Dialnytics virtual assistant, the customer-service agent for Dialnytics, a business calling platform (browser dialer with dedicated caller ID, unlimited calling, CRM, Power Dialer and call recording).
 
-LANGUAGE: {lang_rule} If the customer clearly asks to switch language, switch.
+LANGUAGE: {lang_rule}
 CHANNEL: {channel_rule}
 
 YOUR JOB:
 1. Answer questions about Dialnytics accurately using ONLY the knowledge below. Never invent prices, discounts, trials, features, refund terms, timelines or number availability. If something is not in the knowledge, say the team will confirm it.
 2. Collect the customer's details naturally while helping (ask one or two things at a time, never a long form):
    name, company name, which country/countries they will call, how many users they need, WhatsApp number with country code{' (already known on WhatsApp)' if channel == 'whatsapp' else ''}, and email (optional - ask once; if they skip, that is fine).
-3. Call the save_lead tool as soon as you learn any of these details (you may call it several times). Do not mention the tool.
+3. Call the save_lead tool as soon as you learn any of these details (you may call it several times). Always write your reply to the customer in the SAME response as the tool call. Do not mention the tool.
 4. When all required details are saved, briefly confirm them and say the team will contact them on WhatsApp with number options and payment instructions. Activation is 10-15 minutes after payment confirmation.
 5. If they ask for a demo or trial: there is no free trial; share the product tour link {base_url}/product/tour/ and offer to answer questions. You may still collect their details.
 6. Quote the correct monthly total for their user count when you know it (compute it from the price rules).
@@ -198,20 +202,29 @@ def to_api_messages(rows, limit=40):
     if not out or out[-1]['role'] != 'user': return []
     return out
 
+FAST_MODE = {'ok': True}  # switched off automatically if the model rejects the speed settings
+
 def call_anthropic(api_key, model, system, messages, tools, timeout=40):
-    body = json.dumps({'model': model, 'max_tokens': 700, 'system': system, 'messages': messages,
-                       'tools': tools}).encode()
-    req = urllib.request.Request(ANTHROPIC_URL, data=body, method='POST', headers={
-        'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'})
+    payload = {'model': model, 'max_tokens': 700, 'system': system, 'messages': messages, 'tools': tools}
+    if FAST_MODE['ok']:
+        # Adaptive thinking at low effort: easy questions are answered without thinking (fast);
+        # the model still thinks when a question is unclear or complicated.
+        payload.update(thinking={'type': 'adaptive'}, output_config={'effort': 'low'})
+    headers = {'x-api-key': api_key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'}
     last = None
-    for attempt in range(2):
+    for attempt in range(3):
+        req = urllib.request.Request(ANTHROPIC_URL, data=json.dumps(payload).encode(), method='POST', headers=headers)
         try:
             with urllib.request.urlopen(req, timeout=timeout) as res:
                 return json.loads(res.read().decode())
         except urllib.error.HTTPError as exc:
             last = exc
-            detail = exc.read()[:300].decode('utf-8', 'replace')
+            detail = exc.read()[:400].decode('utf-8', 'replace')
             log.warning('AI API HTTP %s: %s', exc.code, detail)
+            if exc.code == 400 and 'thinking' in payload and any(w in detail for w in ('thinking', 'effort', 'output_config')):
+                FAST_MODE['ok'] = False
+                payload.pop('thinking', None); payload.pop('output_config', None)
+                continue
             if exc.code not in (429, 500, 502, 503, 529): break
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             last = exc
@@ -234,27 +247,31 @@ def run_ai(settings, rows, language, channel, lead, base_url, caller=call_anthro
     current = dict(lead or {})
     earlier = ''
     try:
+        # Build the system prompt ONCE per turn: tool-use follow-up calls must send the exact same
+        # prefix, otherwise the API rejects the returned thinking-block signatures.
+        system = system_prompt(language or 'en', channel, current, base_url)
         for _ in range(4):
-            system = system_prompt(language or 'en', channel, current, base_url)
             resp = caller(settings.anthropic_key, settings.ai_model, system, messages, TOOLS)
             blocks = resp.get('content') or []
             texts = [b.get('text', '') for b in blocks if b.get('type') == 'text' and b.get('text', '').strip()]
             uses = [b for b in blocks if b.get('type') == 'tool_use']
             if texts: result.text = '\n\n'.join(t.strip() for t in texts)
             if resp.get('stop_reason') != 'tool_use' or not uses: break
-            outputs = []
+            outputs, needs_followup = [], not texts
             for use in uses:
                 if use.get('name') == 'save_lead':
                     updates, errors = clean_lead(use.get('input') or {})
                     result.lead_updates.update(updates); current.update(updates)
+                    if errors: needs_followup = True
                     out = {'saved': sorted(updates), 'errors': errors,
                            'still_needed': [FIELD_LABELS[f] for f in missing_fields(current)]}
                 elif use.get('name') == 'request_human':
                     result.human = str((use.get('input') or {}).get('reason', 'Customer asked for the team'))[:300]
                     out = {'ok': True, 'note': 'Team notified. Tell the customer the team will reply here.'}
                 else:
-                    out = {'error': 'unknown tool'}
+                    out = {'error': 'unknown tool'}; needs_followup = True
                 outputs.append({'type': 'tool_result', 'tool_use_id': use.get('id'), 'content': json.dumps(out)})
+            if not needs_followup: break  # the reply was already written alongside the tool call
             messages = messages + [{'role': 'assistant', 'content': blocks}, {'role': 'user', 'content': outputs}]
             earlier = result.text or earlier
             result.text = ''  # the follow-up response carries the reply

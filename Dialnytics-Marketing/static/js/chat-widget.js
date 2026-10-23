@@ -4,18 +4,13 @@
   const root = document.getElementById('dn-chat');
   if (!root) return;
   const WA = root.dataset.wa || '';
-  const T = {
-    en: { title: 'Dialnytics Assistant', status: 'Online · replies in seconds', placeholder: 'Type your message…',
-          send: 'Send', typing: 'Assistant is typing', waiting: 'Our team will reply here shortly.',
-          error: 'Message not sent. Please check your connection and try again.', foot: 'AI assistant · our team can join anytime',
-          chips: ['See prices', 'How does it work?', 'Product tour', 'Talk to a person'], lang: 'اردو / UR' },
-    ur: { title: 'Dialnytics Assistant', status: 'Online · foran jawab', placeholder: 'Apna message likhein…',
-          send: 'Bhejein', typing: 'Assistant likh raha hai', waiting: 'Hamari team jald yahin jawab degi.',
-          error: 'Message nahi gaya. Internet check karke dobara koshish karein.', foot: 'AI assistant · team kisi bhi waqt shamil ho sakti hai',
-          chips: ['Prices batayein', 'Kaise kaam karta hai?', 'Product tour', 'Team se baat karein'], lang: 'English / EN' },
-  };
+  const T = { title: 'Dialnytics Assistant', status: 'Online · replies in seconds', placeholder: 'Type your message…',
+    waiting: 'Our team will reply here shortly.', error: 'Message not sent. Please check your connection and try again.',
+    foot: 'AI assistant · our team can join anytime',
+    greeting: 'Assalam o Alaikum! 👋 Main Dialnytics ka assistant hoon. Plans, prices ya setup ke baare mein kuch bhi poochein — English ya Roman Urdu, jaise aap ko aasan lage.',
+    chips: ['USA plan ka price?', 'How does it work?', 'Product tour', 'Team se baat karni hai'] };
   let csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-  let loaded = false, lang = '', last = 0, open = false, busy = false, started = false, unread = 0, pollTimer = null;
+  let loaded = false, last = 0, open = false, busy = false, started = false, unread = 0, pollTimer = null;
   const store = { get(k) { try { return sessionStorage.getItem(k); } catch (_) { return null; } },
                   set(k, v) { try { sessionStorage.setItem(k, v); } catch (_) {} } };
 
@@ -33,40 +28,30 @@
   const badge = el('span', 'dnc-badge'); badge.hidden = true; launcher.append(badge);
   const teaser = el('div', 'dnc-teaser'); teaser.hidden = true;
   const teaserText = el('button', 'dnc-teaser-text'); teaserText.type = 'button';
-  teaserText.innerHTML = '<strong>Hi! 👋 Questions about plans?</strong><span>Ask our assistant — English or Roman Urdu.</span>';
+  teaserText.innerHTML = '<strong>Assalam o Alaikum! 👋</strong><span>Plans ya prices ke baare mein poochna hai? Ask us anything.</span>';
   const teaserClose = el('button', 'dnc-teaser-x'); teaserClose.type = 'button'; teaserClose.setAttribute('aria-label', 'Dismiss'); teaserClose.innerHTML = svg(ICON_X, 14);
   teaser.append(teaserText, teaserClose);
 
   const panel = el('section', 'dnc-panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Dialnytics chat'); panel.hidden = true;
   const head = el('header', 'dnc-head');
   const avatar = el('span', 'dnc-avatar'); const avImg = el('img'); avImg.src = '/static/img/dialnytics-favlogo.png?v=2'; avImg.alt = ''; avatar.append(avImg);
-  const headText = el('div', 'dnc-head-text'); const hTitle = el('strong', null, T.en.title); const hStatus = el('small', null, T.en.status); headText.append(hTitle, hStatus);
-  const langBtn = el('button', 'dnc-hbtn dnc-lang'); langBtn.type = 'button'; langBtn.hidden = true; langBtn.setAttribute('aria-label', 'Change language');
+  const headText = el('div', 'dnc-head-text'); const hTitle = el('strong', null, T.title); const hStatus = el('small', null, T.status); headText.append(hTitle, hStatus);
   const waBtn = el('a', 'dnc-hbtn'); waBtn.href = 'https://wa.me/' + WA; waBtn.target = '_blank'; waBtn.rel = 'noopener'; waBtn.setAttribute('aria-label', 'Continue on WhatsApp'); waBtn.title = 'Continue on WhatsApp'; waBtn.innerHTML = svg(ICON_WA, 20);
   const closeBtn = el('button', 'dnc-hbtn'); closeBtn.type = 'button'; closeBtn.setAttribute('aria-label', 'Close chat'); closeBtn.innerHTML = svg(ICON_X, 20);
-  head.append(avatar, headText, langBtn, waBtn, closeBtn);
+  head.append(avatar, headText, waBtn, closeBtn);
 
   const body = el('div', 'dnc-body'); body.setAttribute('aria-live', 'polite');
-  const welcome = el('div', 'dnc-welcome');
-  welcome.innerHTML = '<div class="dnc-hello"><span class="dnc-wave">👋</span><h3>Welcome to Dialnytics</h3><p>Business calling with a dedicated caller ID, CRM, Power Dialer and recording. Ask us anything.</p></div><p class="dnc-choose">Please choose your language<br><span>Apni zubaan muntakhib karein</span></p>';
-  const langs = el('div', 'dnc-langs');
-  [['en', 'English', 'Continue in English'], ['ur', 'Roman Urdu', 'Roman Urdu mein baat karein']].forEach(([code, name, sub]) => {
-    const b = el('button', 'dnc-langbtn'); b.type = 'button'; b.dataset.lang = code;
-    b.innerHTML = `<span class="dnc-flag">${code === 'en' ? 'EN' : 'UR'}</span><span><strong>${name}</strong><small>${sub}</small></span>`;
-    b.addEventListener('click', () => start(code)); langs.append(b);
-  });
-  welcome.append(langs);
   const list = el('div', 'dnc-list');
   const typing = el('div', 'dnc-msg bot dnc-typing'); typing.hidden = true;
   typing.innerHTML = '<div class="dnc-bubble"><span></span><span></span><span></span></div>';
-  const chips = el('div', 'dnc-chips'); chips.hidden = true;
-  body.append(welcome, list, typing, chips);
+  const chips = el('div', 'dnc-chips');
+  body.append(list, typing, chips);
 
   const form = el('form', 'dnc-form');
-  const input = el('textarea', 'dnc-input'); input.rows = 1; input.maxLength = 1000; input.placeholder = T.en.placeholder; input.setAttribute('aria-label', 'Message'); input.disabled = true;
-  const sendBtn = el('button', 'dnc-send'); sendBtn.type = 'submit'; sendBtn.setAttribute('aria-label', 'Send'); sendBtn.innerHTML = svg(ICON_SEND, 20); sendBtn.disabled = true;
+  const input = el('textarea', 'dnc-input'); input.rows = 1; input.maxLength = 1000; input.placeholder = T.placeholder; input.setAttribute('aria-label', 'Message');
+  const sendBtn = el('button', 'dnc-send'); sendBtn.type = 'submit'; sendBtn.setAttribute('aria-label', 'Send'); sendBtn.innerHTML = svg(ICON_SEND, 20);
   form.append(input, sendBtn);
-  const foot = el('div', 'dnc-foot'); const footText = el('span', null, T.en.foot); const privacy = el('a', null, 'Privacy'); privacy.href = '/legal/privacy/'; foot.append(footText, privacy);
+  const foot = el('div', 'dnc-foot'); const footText = el('span', null, T.foot); const privacy = el('a', null, 'Privacy'); privacy.href = '/legal/privacy/'; foot.append(footText, privacy);
   const errorBox = el('div', 'dnc-error'); errorBox.hidden = true;
   panel.append(head, body, errorBox, form, foot);
   root.append(teaser, panel, launcher); root.hidden = false;
@@ -99,14 +84,11 @@
   }
   function note(text) { const n = el('div', 'dnc-note', text); list.append(n); scroll(); }
   function scroll() { requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; }); }
-  function applyLang(code) {
-    lang = code; const t = T[code] || T.en;
-    hTitle.textContent = t.title; hStatus.textContent = t.status; input.placeholder = t.placeholder; footText.textContent = t.foot;
-    sendBtn.setAttribute('aria-label', t.send); langBtn.textContent = code === 'ur' ? 'EN' : 'UR'; langBtn.title = t.lang; langBtn.hidden = !code;
-    welcome.hidden = !!code; input.disabled = !code; sendBtn.disabled = !code;
-    chips.replaceChildren(...t.chips.map(label => { const c = el('button', 'dnc-chip', label); c.type = 'button'; c.addEventListener('click', () => send(label)); return c; }));
-    chips.hidden = !code || list.querySelectorAll('.dnc-msg.me').length > 0;
+  function greet() {
+    const row = el('div', 'dnc-msg bot dnc-greeting'); const b = el('div', 'dnc-bubble', T.greeting); row.append(b); list.append(row);
+    chips.replaceChildren(...T.chips.map(label => { const c = el('button', 'dnc-chip', label); c.type = 'button'; c.addEventListener('click', () => send(label)); return c; }));
   }
+  function refreshChips() { chips.hidden = list.querySelectorAll('.dnc-msg.me').length > 0; }
   function showError(text) { errorBox.textContent = text; errorBox.hidden = !text; }
 
   // ------------------------------------------------------------ network
@@ -116,7 +98,7 @@
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf }, body: JSON.stringify(data) });
     let json = {}; try { json = await res.json(); } catch (_) {}
     if (res.status === 403 && data !== undefined) { await history(); throw new Error('retry'); }
-    if (!res.ok) throw new Error(typeof json.detail === 'string' ? json.detail : (T[lang] || T.en).error);
+    if (!res.ok) throw new Error(typeof json.detail === 'string' ? json.detail : T.error);
     return json;
   }
   async function history() {
@@ -125,24 +107,11 @@
       if (d.csrf) csrf = d.csrf;
       if (d.enabled === false) { root.hidden = true; return; }
       (d.messages || []).forEach(addMessage);
-      if (d.language && d.language !== lang) applyLang(d.language);
-      if (d.messages && d.messages.length) { started = true; scroll(); }
+      if (d.messages && d.messages.length) { started = true; refreshChips(); scroll(); }
     } catch (_) {}
   }
-  async function start(code) {
-    if (busy) return; busy = true; showError('');
-    try {
-      let d;
-      try { d = await api('/api/chat/start', { language: code }); }
-      catch (e) { if (e.message !== 'retry') throw e; d = await api('/api/chat/start', { language: code }); }
-      started = true; applyLang(d.language || code);
-      (d.messages || []).forEach(addMessage); chips.hidden = list.querySelectorAll('.dnc-msg.me').length > 0;
-      scroll(); input.focus();
-    } catch (e) { showError(e.message); }
-    finally { busy = false; }
-  }
   async function send(text) {
-    text = (text || '').trim(); if (!text || busy || !lang) return;
+    text = (text || '').trim(); if (!text || busy) return;
     busy = true; showError(''); chips.hidden = true; sendBtn.disabled = true;
     const temp = el('div', 'dnc-msg me pending'); const tb = el('div', 'dnc-bubble'); linkify(tb, text); temp.append(tb); list.append(temp);
     input.value = ''; autosize(); typing.hidden = false; scroll();
@@ -150,8 +119,8 @@
       let d;
       try { d = await api('/api/chat/message', { text }); }
       catch (e) { if (e.message !== 'retry') throw e; d = await api('/api/chat/message', { text }); }
-      temp.remove(); (d.messages || []).forEach(addMessage);
-      if (d.waiting) note((T[lang] || T.en).waiting);
+      temp.remove(); started = true; (d.messages || []).forEach(addMessage);
+      if (d.waiting) note(T.waiting);
     } catch (e) { temp.classList.add('failed'); input.value = text; showError(e.message); }
     finally { typing.hidden = true; busy = false; sendBtn.disabled = false; scroll(); }
   }
@@ -161,7 +130,7 @@
     open = v; panel.hidden = !v; root.classList.toggle('is-open', v); launcher.setAttribute('aria-expanded', String(v));
     document.documentElement.classList.toggle('dnc-lock', v && window.matchMedia('(max-width: 600px)').matches);
     store.set('dnc-open', v ? '1' : '0');
-    if (v) { teaser.hidden = true; store.set('dnc-teased', '1'); unread = 0; badge.hidden = true; history().then(scroll); if (lang) setTimeout(() => input.focus(), 50); }
+    if (v) { teaser.hidden = true; store.set('dnc-teased', '1'); unread = 0; badge.hidden = true; history().then(scroll); setTimeout(() => input.focus(), 50); }
     clearInterval(pollTimer);
     pollTimer = setInterval(() => { if (!document.hidden && (open || started)) history(); }, v ? 5000 : 30000);
   }
@@ -169,13 +138,13 @@
   closeBtn.addEventListener('click', () => { setOpen(false); launcher.focus(); });
   teaserText.addEventListener('click', () => setOpen(true));
   teaserClose.addEventListener('click', () => { teaser.hidden = true; store.set('dnc-teased', '1'); });
-  langBtn.addEventListener('click', () => start(lang === 'ur' ? 'en' : 'ur'));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && open) { setOpen(false); launcher.focus(); } });
   function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; }
   input.addEventListener('input', autosize);
   input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
   form.addEventListener('submit', e => { e.preventDefault(); send(input.value); });
 
+  greet();
   history().then(() => {
     loaded = true;
     if (store.get('dnc-open') === '1') setOpen(true);
