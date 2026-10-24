@@ -251,7 +251,7 @@ def create_app(settings=None):
     @app.get('/favicon.ico')
     def favicon(): return RedirectResponse('/static/img/favicon.svg',status_code=302)
     @app.get('/',response_class=HTMLResponse)
-    def home(request:Request): return render(request,'home.html')
+    def home(request:Request): return render(request,'home.html',{'full_title':'Dialnytics – Business Calling, CRM & Power Dialer'})
     @app.get('/pricing/',response_class=HTMLResponse)
     def pricing(request:Request): return render(request,'pricing.html',{'page_title':'One plan price. Everything included.'})
     @app.get('/get-started/',response_class=HTMLResponse)
