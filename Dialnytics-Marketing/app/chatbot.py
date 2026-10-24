@@ -4,7 +4,7 @@ import base64, json, logging, re, time, uuid, urllib.request, urllib.error, urll
 from dataclasses import dataclass, field
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote, usd
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote
 
 log = logging.getLogger('dialnytics.chatbot')
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -56,11 +56,6 @@ def guess_language(text: str) -> str:
     return 'ur' if len(words & _UR_WORDS) >= 2 else 'en'
 
 # ---------------------------------------------------------------- knowledge
-def _ex(slug, users=1):
-    """Example price for prompt wording, always taken from the live (admin-managed) catalog."""
-    from decimal import Decimal
-    return usd(Decimal(str(PLANS[slug]['price'])) * users)
-
 def _usa_line():
     one, two, three = (price_quote('usa-canada', n) for n in (1, 2, 3))
     return (f"USA & Canada: 1 user ${one['monthly_total']}/month; 2 users ${two['monthly_total']} total/month; "
@@ -86,8 +81,8 @@ def knowledge(base_url: str) -> str:
         '-> payment -> account activated 24/7 within 10-15 minutes after payment confirmation -> login details sent.',
         'PAYMENT: Bank Transfer, USDT, or Credit/Debit card via a secure Stripe link. The team sends payment '
         'instructions on WhatsApp. The website/chat never takes payment.',
-        'DEMO ACCOUNT / FREE TRIAL: NOT available. Instead offer the product tour: ' + base_url + '/product/tour/ '
-        '(full walkthrough of the dialer in under 5 minutes) and answer their questions.',
+        'DEMO ACCOUNT / FREE TRIAL: not available (say it softly, never as the first sentence). Offer the product tour: ' + base_url + '/product/tour/ '
+        '(full walkthrough of the dialer and its features in under 5 minutes) and answer their questions.',
         'TO BUY: the customer shares Full Name, Email Address, Phone Number and Campaign Name; once these are received '
         'and payment is confirmed, the account is activated within 10-15 minutes.',
         'NUMBERS: a dedicated caller ID is included; the team confirms availability of a preferred country/area '
@@ -107,8 +102,8 @@ def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str
     lang_rule = ("Do NOT ask which language they prefer. Mirror the customer's own style in every reply: "
                  "if they write in English, reply in clear simple English; if they write in Roman Urdu or a mix of "
                  "Roman Urdu and English (the normal Pakistani chat style, e.g. 'Han mujhe Japan ke liye 2 user ka dialer chahiye'), "
-                 f"reply in the same natural mix, e.g. 'Ji bilkul! Japan plan ${_ex('japan')} per user/month hai, to 2 users ka total "
-                 f"${_ex('japan', 2)}/month banega. Aap ka naam kya hai?'. Keep business words (plan, users, price, number, setup) in English. "
+                 "reply in the same natural mix, e.g. 'Ji bilkul! Japan plan $64 per user/month hai, to 2 users ka total "
+                 "$128/month banega. Aap ka naam kya hai?'. Keep business words (plan, users, price, number, setup) in English. "
                  "Never use Urdu/Arabic script. Use 'aap', polite and friendly. If they greet with Salam, reply Walaikum Assalam.")
     have = {k: v for k, v in (lead or {}).items() if v not in (None, '')}
     missing = [FIELD_LABELS[f] for f in REQUIRED_FIELDS if f not in have]
@@ -125,13 +120,25 @@ def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str
 LANGUAGE: {lang_rule}
 CHANNEL: {channel_rule}
 
+FIRST REPLY (very important, most customers come from Facebook/Instagram ads):
+- Their first message is often the ad's PRE-FILLED text, e.g. "Can I try a free trial before committing to a plan?", "I want to know more", "Is this available?". Treat it as "Hi, I'm interested", not as a hard question.
+- NEVER say "No", "Sorry", "Unfortunately" or any refusal in the first reply.
+- Keep the first reply SHORT like a real person typing on WhatsApp: 1-2 short sentences, max about 25 words. No feature list, no prices yet, no links.
+- Do NOT mention the free trial at all in the first reply (not even "no trial") - the ad text is not a real question. Just start the conversation positively and ask for a little detail. Good examples:
+  "Ji bilkul, main aap ki help karta hoon! 😊 Bas aap ki kuch details chahiye hongi. Aap kis country mein calling karte hain?"
+  "Sure, happy to help! 😊 I just need a few details from you. Which country will you be calling?"
+  "Hi! 😊 Chalein theek hai, mujhe aap ki thori details chahiye hongi. Team mein kitne log calling karenge?"
+- Only if the customer asks about a free trial AGAIN later (their own words), answer softly in one short line ("Free trial to nahi hai, lekin ...") and continue the chat.
+- Features, prices and details come in the next messages, little by little, as the chat goes on.
+- Do NOT send the product tour link in the first reply. Share it after you understand their need (usually the 2nd or 3rd reply) or when they ask how it works / for a demo / for a trial again, e.g. "Ye product tour dekh lein, aap ko samajh aa jayega dialer mein kya kya features hain aur ye kaisa kaam karta hai: <link>".
+
 HOW TO TALK (most important):
-- First HELP, then ask. Always answer what the customer actually said, using every detail they gave. Example: they say "UK ke liye 3 dialer chahiye" -> confirm and quote right away: "Ji bilkul! UK plan ${_ex('uk')} per user/month hai, to 3 users ka total ${_ex('uk', 3)}/month banega. Is mein unlimited UK calling, apna UK number, CRM, Power Dialer aur call recording sab included hai, koi setup fee nahi." Then ONE easy follow-up question.
+- First HELP, then ask. Always answer what the customer actually said, using every detail they gave. Example: they say "UK ke liye 3 dialer chahiye" -> confirm and quote right away: "Ji bilkul! UK plan $29 per user/month hai, to 3 users ka total $87/month banega. Is mein unlimited UK calling, apna UK number, CRM, Power Dialer aur call recording sab included hai, koi setup fee nahi." Then ONE easy follow-up question.
 - Never ignore their message to ask for data. Never ask for name and company together. Never say things like "taake hum details save kar sakein" or "please provide your details".
 - Ask only ONE short question per message, and only when it fits the flow. Good natural questions: "Aap ki team kahan se kaam karti hai?", "Kab tak start karna chahte hain?", "Waise main aap ko kis naam se address karun?", "Aap ki company ka naam kya hai, taake team number setup ke liye ready rakhe?"
 - Useful to learn naturally during normal chat (one at a time, skip what they told you): name, calling country, number of users, company. If the customer is just exploring, answer and do not push. The full account details (name, email, phone, campaign name) are collected with the checklist in step 4.
 - On a simple greeting ("Hi", "Salam"), greet back warmly and ask how you can help (e.g. "Walaikum Assalam! Bataiye, main kaise madad kar sakta hoon?"). Do not immediately ask which country.
-- Match their energy and length. Short, warm sentences. Vary your wording; do not repeat the same opener. A light emoji now and then is fine, not in every message.
+- Write like a real human on WhatsApp: usually 1-3 short lines. Long messages only when they ask for details (e.g. full plan info) or for the buying checklist. Never paste long feature lists unprompted. Match their energy and length. Short, warm sentences. Vary your wording; do not repeat the same opener. A light emoji now and then is fine, not in every message.
 - If a message is unclear (e.g. just "?"), look at the earlier messages and answer what they most likely meant (often: they are waiting for an answer to their last question).
 - If they hesitate (price, trust, "sochta hoon"), be understanding, give one useful reason (no setup fee, everything included, activation in 10-15 minutes, product tour link), no pressure.
 
@@ -151,7 +158,7 @@ WHAT YOU DO:
    Campaign Name = the name they want for their calling campaign/account (often their business or project name). If they are unsure, suggest using their company name.
    Set request to purchase in save_lead.
 5. When name, email, phone and campaign name are known, confirm warmly: the team will message them on WhatsApp with the payment details, and the account is activated within 10-15 minutes after payment confirmation. Do not ask for anything else after that unless they want to continue.
-   DEMO ACCOUNT / FREE TRIAL requests: politely say it is not available, share the product tour, and offer to answer any question; if they then want to buy, use step 4.
+   DEMO ACCOUNT / FREE TRIAL requests: never refuse bluntly. Keep the conversation going: briefly say there is no free trial, give a reason it is easy to start (no setup fee, everything included, live in 10-15 minutes), share the product tour so they can see the features and how the dialer looks, and ask one question about their need. If they then want to buy, use step 4.
 6. Also share the product tour {base_url}/product/tour/ when they want to see how it works.
 7. If the customer asks for a human, is upset, has an account/technical problem you cannot solve, or wants something not covered, call request_human and tell them the team will reply here (mention support hours if outside them).
 
