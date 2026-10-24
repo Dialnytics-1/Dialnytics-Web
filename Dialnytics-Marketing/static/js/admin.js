@@ -67,3 +67,9 @@ document.querySelectorAll('[data-confirm-chat-delete]').forEach(form=>form.addEv
   box?.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();box.form.requestSubmit();}});
   box?.form.addEventListener('submit',()=>{const btn=box.form.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.firstChild.textContent='Sending… ';}});
 })();
+
+// Confirm before destructive admin buttons that carry data-confirm (e.g. pricing reset).
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-confirm]');
+  if (button && !window.confirm(button.dataset.confirm)) event.preventDefault();
+});

@@ -38,7 +38,7 @@ def admin_csrf(client,record_id):
     r=client.get('/admin/requests/'+record_id)
     return BeautifulSoup(r.text,'html.parser').find('input',attrs={'name':'csrf'})['value']
 
-@pytest.mark.parametrize('plan,users,expected',[('usa-canada',1,'22.00'),('usa-canada',2,'38.00'),('usa-canada',3,'45.00'),('usa-canada',5,'75.00'),('uk',1,'29.00'),('uk',2,'58.00'),('australia',3,'132.00'),('japan',2,'128.00'),('global',1,'179.00'),('custom',3,None),('europe',1,None)])
+@pytest.mark.parametrize('plan,users,expected',[('usa-canada',1,'22.00'),('usa-canada',2,'40.00'),('usa-canada',3,'54.00'),('usa-canada',5,'90.00'),('uk',1,'29.00'),('uk',2,'58.00'),('australia',3,'132.00'),('japan',2,'128.00'),('global',1,'179.00'),('custom',3,None),('europe',1,None)])
 def test_price(plan,users,expected):
     q=price_quote(plan,users);assert q['monthly_total']==expected;assert q['extra_charges']=='0.00';assert q['setup_fee']=='0.00'
 @pytest.mark.parametrize('count,expected',[(1,'44.00'),(2,'79.00'),(3,'110.60'),(4,'137.40'),(5,'159.85'),(6,'178.52')])
@@ -101,7 +101,7 @@ def test_consent_required(client):
 def test_server_pricing_and_no_payment_claim(client,app):
     p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=2,payment='stripe')
     r=submit(client,p);assert r.status_code==200,r.text
-    assert r.json()['quote']['monthly_total']=='38.00'
+    assert r.json()['quote']['monthly_total']=='40.00'
     assert 'paid' not in r.json()
     with app.state.DB() as db: assert db.scalar(select(Submission)).status=='new'
     p['idempotency_key']=str(uuid.uuid4());p['monthly_total']='0.01'
@@ -228,3 +228,26 @@ def test_admin_session_invalidated_on_password_change(client,app):
     login(client)
     app.state.settings.admin_password_hash=hash_password('AnotherTestPassword-1234')
     assert client.get('/admin',follow_redirects=False).status_code==303
+
+
+def test_admin_pricing_editor(client,app):
+    from app.catalog import apply_prices
+    try:
+        assert client.get('/admin/pricing',follow_redirects=False).status_code==303
+        login(client)
+        page=client.get('/admin/pricing');assert page.status_code==200 and 'name="usa_per"' in page.text
+        import re
+        csrf=re.search(r'name="csrf" value="([^"]+)"',page.text).group(1)
+        from app.catalog import PRICE_FIELDS,DEFAULT_PRICES
+        form={k:str(DEFAULT_PRICES[k]) for k,*_ in PRICE_FIELDS}
+        assert client.post('/admin/pricing',data={**form,'usa_per':'20','csrf':'wrong'}).status_code==403
+        bad=client.post('/admin/pricing',data={**form,'usa_per':'abc','csrf':csrf});assert bad.status_code==422 and 'Nothing was saved' in bad.text
+        ok=client.post('/admin/pricing',data={**form,'usa_per':'20','japan':'59.50','csrf':csrf});assert ok.status_code==200 and 'Prices saved' in ok.text
+        assert '$20/user' in client.get('/pricing/').text
+        assert '$59.50' in client.get('/numbers/japan/').text
+        p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=3,payment='stripe')
+        r=submit(client,p);assert r.status_code==200,r.text;assert r.json()['quote']['monthly_total']=='60.00'
+        reset=client.post('/admin/pricing',data={**form,'action':'reset','csrf':csrf});assert reset.status_code==200
+        assert '$18/user' in client.get('/pricing/').text
+    finally:
+        apply_prices({})

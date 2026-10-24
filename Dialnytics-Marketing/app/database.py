@@ -60,6 +60,14 @@ class RateBucket(Base):
     count: Mapped[int]=mapped_column(Integer,default=1)
     expires_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True)
 
+class Setting(Base):
+    """Small key/value store for admin-managed settings (e.g. published prices)."""
+    __tablename__='mkt_settings'
+    key: Mapped[str]=mapped_column(String(60),primary_key=True)
+    value: Mapped[dict]=mapped_column(JSON,default=dict)
+    updated_by: Mapped[str]=mapped_column(String(254),default='')
+    updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+
 class ChatConversation(Base):
     """One website-chat visitor or one WhatsApp number."""
     __tablename__='mkt_chat_conversations'

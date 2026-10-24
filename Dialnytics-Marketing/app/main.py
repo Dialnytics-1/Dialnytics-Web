@@ -12,10 +12,10 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from sqlalchemy import select, update, delete, func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from .settings import Settings, ROOT
-from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket
+from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket, Setting
 from .security import now, sha, verify_password, form_token, valid_form_token, csv_safe
-from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog
-from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd
+from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, refresh_price_text
 from .mail import deliver_one
 from .chat_routes import register_chat
 
@@ -88,11 +88,27 @@ def create_app(settings=None):
     templates.env.filters['money']=lambda x: f'{float(x):,.2f}' if x is not None else 'Quote'
     templates.env.filters['stamp']=lambda x: aware(x).astimezone(timezone(timedelta(hours=5))).strftime('%d %b %Y, %I:%M %p PKT') if x else '-'
     templates.env.filters['pretty']=lambda x: json.dumps(x,indent=2,ensure_ascii=False)
+    templates.env.filters['usd']=lambda x: usd(x) if x is not None else ''
+
+    # Admin-managed prices live in the marketing database (mkt_settings, key 'prices').
+    price_state={'checked':0.0,'stamp':None}
+    def load_prices(force=False):
+        if not force and time.monotonic()-price_state['checked']<30: return
+        price_state['checked']=time.monotonic()
+        with DB() as db: row=db.get(Setting,'prices')
+        stamp=(row.updated_at.isoformat() if row and row.updated_at else None)
+        if not force and stamp==price_state['stamp']: return
+        values=(row.value or {}).get('values',{}) if row else {}
+        try: apply_prices(clean_prices({**{k:str(v) for k,v in DEFAULT_PRICES.items()},**values}) if values else {}, (row.value or {}).get('version') if row else None)
+        except ValueError: log.error('Stored prices are invalid; using defaults.'); apply_prices({})
+        refresh_price_text(); price_state['stamp']=stamp
 
     @asynccontextmanager
     async def lifespan(app):
         settings.validate()
         init_database(engine)
+        try: load_prices(force=True)
+        except SQLAlchemyError: log.exception('Could not load saved prices; using defaults.')
         stop=asyncio.Event()
         async def mail_loop():
             while not stop.is_set():
@@ -131,6 +147,8 @@ def create_app(settings=None):
                     status_code=403
                 )
 
+        try: load_prices()
+        except SQLAlchemyError: log.warning('Price refresh skipped: database unavailable.')
         response = await call_next(request)
 
         response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -177,7 +195,7 @@ def create_app(settings=None):
         if not valid_form_token(settings.secret,csrf,'public'): csrf=form_token(settings.secret,'public')
         ctx={'business':BUSINESS,'plans':PLANS,'features':FEATURES,'faq':FAQ,
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
-             'catalog':client_catalog(),'csrf':csrf,'year':now().year,
+             'catalog':client_catalog(),'pricing':price_view(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
              'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'page_title':'Business calling, without the extra layers.',
              'description':'Unlimited business calling, dedicated caller ID, CRM, Power Dialer and recording. Clear prices. A human setup process.',
@@ -452,6 +470,44 @@ def create_app(settings=None):
         if not sess: return RedirectResponse('/admin/login',status_code=303)
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
+
+    def pricing_groups(values):
+        groups=[]
+        for key,label,group,default,lo,hi in PRICE_FIELDS:
+            if not groups or groups[-1][0]!=group: groups.append((group,[]))
+            groups[-1][1].append({'key':key,'label':label,'value':values.get(key,usd(DEFAULT_PRICES[key])),'default':usd(DEFAULT_PRICES[key]),'min':lo,'max':hi})
+        return groups
+    @app.get('/admin/pricing',response_class=HTMLResponse)
+    def admin_pricing(request:Request):
+        sess=admin_session(request)
+        if not sess: return RedirectResponse('/admin/login',status_code=303)
+        load_prices(force=True)
+        with DB() as db: row=db.get(Setting,'prices')
+        return render(request,'admin_pricing.html',{'page_title':'Pricing','admin':sess,'groups':pricing_groups({k:usd(v) for k,v in PRICES.items()}),
+            'row':row,'saved':request.query_params.get('saved'),'reset':request.query_params.get('reset'),'error':None,'preview':price_view()})
+    @app.post('/admin/pricing',response_class=HTMLResponse)
+    async def admin_pricing_save(request:Request):
+        form=await request.form()
+        sess=admin_required(request,str(form.get('csrf','')))
+        action=str(form.get('action','save'))
+        if action=='reset': values={k:v for k,v in DEFAULT_PRICES.items()}
+        else:
+            raw={k:str(form.get(k,'')) for k,*_ in PRICE_FIELDS}
+            try: values=clean_prices(raw)
+            except ValueError as exc:
+                with DB() as db: row=db.get(Setting,'prices')
+                return render(request,'admin_pricing.html',{'page_title':'Pricing','admin':sess,'groups':pricing_groups(raw),'row':row,'saved':None,'reset':None,'error':str(exc),'preview':price_view()},status=422)
+        before={k:usd(v) for k,v in PRICES.items()}
+        version=now().strftime('%Y-%m-%d')+'.admin-'+secrets.token_hex(3)
+        with DB.begin() as db:
+            row=db.get(Setting,'prices')
+            payload={'values':{k:str(v) for k,v in values.items()},'version':version}
+            if row: row.value=payload; row.updated_by=sess.email; row.updated_at=now()
+            else: db.add(Setting(key='prices',value=payload,updated_by=sess.email,updated_at=now()))
+            changed=[k for k,v in values.items() if usd(v)!=before.get(k)]
+            audit(db,sess,('prices reset to defaults' if action=='reset' else 'prices updated: '+(', '.join(changed) or 'no change'))[:100],version[:32])
+        load_prices(force=True)
+        return RedirectResponse('/admin/pricing?'+('reset=1' if action=='reset' else 'saved=1'),status_code=303)
 
     register_chat(app,settings,DB,render,require_public_csrf,rate_limit,admin_session,admin_required,audit)
 

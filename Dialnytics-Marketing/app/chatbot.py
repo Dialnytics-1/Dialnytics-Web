@@ -4,7 +4,7 @@ import base64, json, logging, re, time, uuid, urllib.request, urllib.error, urll
 from dataclasses import dataclass, field
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
-from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_TOTALS, price_quote, usd
 
 log = logging.getLogger('dialnytics.chatbot')
 ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
@@ -56,6 +56,11 @@ def guess_language(text: str) -> str:
     return 'ur' if len(words & _UR_WORDS) >= 2 else 'en'
 
 # ---------------------------------------------------------------- knowledge
+def _ex(slug, users=1):
+    """Example price for prompt wording, always taken from the live (admin-managed) catalog."""
+    from decimal import Decimal
+    return usd(Decimal(str(PLANS[slug]['price'])) * users)
+
 def _usa_line():
     one, two, three = (price_quote('usa-canada', n) for n in (1, 2, 3))
     return (f"USA & Canada: 1 user ${one['monthly_total']}/month; 2 users ${two['monthly_total']} total/month; "
@@ -102,8 +107,8 @@ def system_prompt(language: str, channel: str, lead: dict, base_url: str) -> str
     lang_rule = ("Do NOT ask which language they prefer. Mirror the customer's own style in every reply: "
                  "if they write in English, reply in clear simple English; if they write in Roman Urdu or a mix of "
                  "Roman Urdu and English (the normal Pakistani chat style, e.g. 'Han mujhe Japan ke liye 2 user ka dialer chahiye'), "
-                 "reply in the same natural mix, e.g. 'Ji bilkul! Japan plan $64 per user/month hai, to 2 users ka total "
-                 "$128/month banega. Aap ka naam kya hai?'. Keep business words (plan, users, price, number, setup) in English. "
+                 f"reply in the same natural mix, e.g. 'Ji bilkul! Japan plan ${_ex('japan')} per user/month hai, to 2 users ka total "
+                 f"${_ex('japan', 2)}/month banega. Aap ka naam kya hai?'. Keep business words (plan, users, price, number, setup) in English. "
                  "Never use Urdu/Arabic script. Use 'aap', polite and friendly. If they greet with Salam, reply Walaikum Assalam.")
     have = {k: v for k, v in (lead or {}).items() if v not in (None, '')}
     missing = [FIELD_LABELS[f] for f in REQUIRED_FIELDS if f not in have]
@@ -121,7 +126,7 @@ LANGUAGE: {lang_rule}
 CHANNEL: {channel_rule}
 
 HOW TO TALK (most important):
-- First HELP, then ask. Always answer what the customer actually said, using every detail they gave. Example: they say "UK ke liye 3 dialer chahiye" -> confirm and quote right away: "Ji bilkul! UK plan $29 per user/month hai, to 3 users ka total $87/month banega. Is mein unlimited UK calling, apna UK number, CRM, Power Dialer aur call recording sab included hai, koi setup fee nahi." Then ONE easy follow-up question.
+- First HELP, then ask. Always answer what the customer actually said, using every detail they gave. Example: they say "UK ke liye 3 dialer chahiye" -> confirm and quote right away: "Ji bilkul! UK plan ${_ex('uk')} per user/month hai, to 3 users ka total ${_ex('uk', 3)}/month banega. Is mein unlimited UK calling, apna UK number, CRM, Power Dialer aur call recording sab included hai, koi setup fee nahi." Then ONE easy follow-up question.
 - Never ignore their message to ask for data. Never ask for name and company together. Never say things like "taake hum details save kar sakein" or "please provide your details".
 - Ask only ONE short question per message, and only when it fits the flow. Good natural questions: "Aap ki team kahan se kaam karti hai?", "Kab tak start karna chahte hain?", "Waise main aap ko kis naam se address karun?", "Aap ki company ka naam kya hai, taake team number setup ke liye ready rakhe?"
 - Useful to learn naturally during normal chat (one at a time, skip what they told you): name, calling country, number of users, company. If the customer is just exploring, answer and do not push. The full account details (name, email, phone, campaign name) are collected with the checklist in step 4.

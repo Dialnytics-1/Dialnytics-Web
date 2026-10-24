@@ -98,14 +98,16 @@ backend access, or copied customer media.
 | Plan | Monthly USD |
 |---|---:|
 | USA/Canada, one user | $22 |
-| USA/Canada, two users | $38 total |
-| USA/Canada, three or more | $15 per user |
+| USA/Canada, two users | $40 total |
+| USA/Canada, three or more | $18 per user |
 | UK | $29 per user |
 | Australia | $44 per user |
 | Japan | $64 per user |
 | Global | $179 per user |
 | UK to Europe, one selected destination | $44 per user |
 | European local numbers / Custom | Quote before payment |
+
+These are the default prices. Admins can change every published price at `/admin/pricing`; the change is saved in the marketing database (`mkt_settings`) and applies to pages, calculator, order quotes and the AI chat assistant. Already submitted enquiries keep their saved quote.
 
 No setup fee, no extra plan charges and no free trial. The seven confirmed included
 features are unlimited calling, dedicated caller ID, CRM integration, Power Dialer,

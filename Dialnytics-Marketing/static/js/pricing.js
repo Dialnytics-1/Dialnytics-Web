@@ -1,4 +1,4 @@
-import { getQuote, money, quantity } from './shared.js';
+import { getQuote, money, quantity } from './shared.js?v=2';
 const catalog = JSON.parse(document.getElementById('pricing-data').textContent);
 const root = document.querySelector('[data-calculator]');
 const plan = document.getElementById('calc-plan');

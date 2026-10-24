@@ -1,4 +1,4 @@
-import { getQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js';
+import { getQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js?v=2';
 const catalog = JSON.parse(document.getElementById('pricing-data').textContent);
 const root = document.getElementById('order-app');
 const form = document.getElementById('order-form');
@@ -29,7 +29,7 @@ function update() {
   document.getElementById('summary-total').textContent=quote.total===null ? 'Custom quote' : money(quote.total);
   document.getElementById('summary-countries').textContent=plan.value==='uk-to-europe' ? (selectedCountries().length ? selectedCountries().join(', ') : 'Select at least one European destination.') : '';
   document.getElementById('plan-explainer').textContent = plan.value === 'usa-canada'
-    ? '1 user: $22/month. 2 users: $38 total/month. 3+ users: $15 per user/month.'
+    ? '1 user: '+money(Number(catalog.usa.one))+'/month. 2 users: '+money(Number(catalog.usa.two))+' total/month. 3+ users: '+money(Number(catalog.usa.per))+' per user/month.'
     : plan.value === 'uk-to-europe' ? 'The monthly rate is for your chosen destination package per user. Select 1-6 countries. For more destinations, choose Custom Plan.'
     : quote.total===null ? 'No invented price: tell us your requirements and our team will confirm a quote before you pay.'
     : money(quote.rate)+' per user/month. All seven current plan features are included.';

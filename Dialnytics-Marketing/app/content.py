@@ -160,3 +160,30 @@ COLLECTIONS={
  '/legal/':('Clear information before you decide.','Legal & policies','Review the current published information and request final written terms before payment.','legal'),
  '/roadmap/':('Coming later. Not sold today.','Product roadmap','AI summaries/transcripts, live captions and Floating Phone are planned. No release date is promised.','roadmap'),
 }
+
+# ---------------------------------------------------------------- price text that follows admin-managed prices
+def _usa_pricing_text():
+    from .catalog import price_view
+    p = price_view()
+    return (f"One user is ${p['usa_1']} per month. Two users are ${p['usa_2']} total per month. "
+            f"Three or more users are ${p['usa_per']} per user per month. For example, five users cost ${p['usa_5_total']} per month.")
+
+def _plans_text():
+    from .catalog import price_view
+    p = price_view()
+    return (f"Prices are in US dollars per month. USA/Canada: one user ${p['usa_1']}, two users ${p['usa_2']} total, "
+            f"three or more ${p['usa_per']} per user. UK ${p['uk']}, Australia ${p['australia']}, Japan ${p['japan']} "
+            f"and Global ${p['global']} per user. Setup is free; no additional plan charges are added.")
+
+def refresh_price_text():
+    """Rewrite the few content strings that quote prices (FAQ + billing policy) after prices change."""
+    for i, (q, _) in enumerate(FAQ):
+        if q == 'How does USA and Canada team pricing work?':
+            FAQ[i] = (q, _usa_pricing_text())
+    page = PAGES.get('/legal/billing-refund-cancellation/')
+    if page:
+        for section in page['sections']:
+            if section['title'] == 'Monthly plans':
+                section['text'] = _plans_text()
+
+refresh_price_text()

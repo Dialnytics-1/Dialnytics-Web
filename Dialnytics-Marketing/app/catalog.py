@@ -1,7 +1,7 @@
 """Owner-approved marketing prices. Never trust a price sent by a browser."""
 from decimal import Decimal
 
-CATALOG_VERSION = '2026-10-22.1'
+CATALOG_VERSION = '2026-10-22.1'   # replaced with a version stamp when an admin saves new prices
 BUSINESS = {
     'brand': 'Dialnytics', 'legal_name': 'PRIME MSM LIMITED',
     'company_number': '17282032',
@@ -34,6 +34,68 @@ EUROPE_COUNTRIES = ['Austria','Belgium','Bulgaria','Croatia','Cyprus','Czech Rep
 # See docs/PRICING.md for the decision and owner-review note.
 EUROPE_TOTALS = {1: Decimal('44'), 2: Decimal('79'), 3: Decimal('110.60'), 4: Decimal('137.40'), 5: Decimal('159.85'), 6: Decimal('178.52')}
 
+# ---------------------------------------------------------------- admin-editable prices
+# key, label, group, default (USD), minimum, maximum. Defaults are the owner-approved prices above.
+PRICE_FIELDS = [
+    ('usa_1', '1 user (monthly total)', 'USA & Canada', '22', '1', '1000'),
+    ('usa_2', '2 users (monthly total)', 'USA & Canada', '40', '1', '2000'),
+    ('usa_per', '3+ users (per user / month)', 'USA & Canada', '18', '1', '1000'),
+    ('uk', 'United Kingdom (per user / month)', 'Country plans', '29', '1', '1000'),
+    ('australia', 'Australia (per user / month)', 'Country plans', '44', '1', '1000'),
+    ('japan', 'Japan (per user / month)', 'Country plans', '64', '1', '1000'),
+    ('global', 'Global (per user / month)', 'Country plans', '179', '1', '5000'),
+    ('eu_1', '1 destination (per user / month)', 'UK to Europe', '44', '1', '5000'),
+    ('eu_2', '2 destinations (per user / month)', 'UK to Europe', '79', '1', '5000'),
+    ('eu_3', '3 destinations (per user / month)', 'UK to Europe', '110.60', '1', '5000'),
+    ('eu_4', '4 destinations (per user / month)', 'UK to Europe', '137.40', '1', '5000'),
+    ('eu_5', '5 destinations (per user / month)', 'UK to Europe', '159.85', '1', '5000'),
+    ('eu_6', '6 destinations (per user / month)', 'UK to Europe', '178.52', '1', '5000'),
+]
+DEFAULT_PRICES = {k: Decimal(d) for k, _, _, d, _, _ in PRICE_FIELDS}
+PRICES = dict(DEFAULT_PRICES)
+
+def clean_prices(raw: dict) -> dict:
+    """Validate admin input. Returns Decimals with at most 2 decimal places; raises ValueError with a readable message."""
+    out = {}
+    for key, label, group, default, lo, hi in PRICE_FIELDS:
+        value = str(raw.get(key, '')).strip().replace('$', '').replace(',', '')
+        try:
+            d = Decimal(value)
+        except Exception:
+            raise ValueError(f'{group} - {label}: enter a number.')
+        if not d.is_finite() or d != d.quantize(Decimal('0.01')):
+            raise ValueError(f'{group} - {label}: use at most 2 decimal places.')
+        if not Decimal(lo) <= d <= Decimal(hi):
+            raise ValueError(f'{group} - {label}: must be between {lo} and {hi}.')
+        out[key] = d.quantize(Decimal('0.01'))
+    return out
+
+def apply_prices(values: dict, version: str | None = None) -> None:
+    """Update the in-memory catalog in place so every importer (pages, calculator, quotes, chatbot) sees the new prices."""
+    global CATALOG_VERSION
+    merged = dict(DEFAULT_PRICES); merged.update({k: Decimal(str(v)) for k, v in (values or {}).items() if k in DEFAULT_PRICES})
+    PRICES.clear(); PRICES.update(merged)
+    num = lambda d: int(d) if d == d.to_integral_value() else float(d)
+    PLANS['usa-canada']['price'] = num(merged['usa_1']); PLANS['usa-canada']['from_price'] = num(merged['usa_per'])
+    for slug in ('uk', 'australia', 'japan', 'global'):
+        PLANS[slug]['price'] = PLANS[slug]['from_price'] = num(merged[slug])
+    PLANS['uk-to-europe']['price'] = PLANS['uk-to-europe']['from_price'] = num(merged['eu_1'])
+    EUROPE_TOTALS.clear(); EUROPE_TOTALS.update({n: merged['eu_' + str(n)] for n in range(1, 7)})
+    if version: CATALOG_VERSION = version
+
+def usd(value) -> str:
+    """22 -> '22', 110.6 -> '110.60'."""
+    d = Decimal(str(value))
+    return str(int(d)) if d == d.to_integral_value() else f'{d:.2f}'
+
+def price_view() -> dict:
+    """Ready-to-print prices for templates."""
+    p = PRICES
+    return {'usa_1': usd(p['usa_1']), 'usa_2': usd(p['usa_2']), 'usa_per': usd(p['usa_per']),
+            'usa_3_total': usd(p['usa_per'] * 3), 'usa_5_total': usd(p['usa_per'] * 5),
+            'uk': usd(p['uk']), 'australia': usd(p['australia']), 'japan': usd(p['japan']), 'global': usd(p['global']),
+            'eu_1': usd(p['eu_1'])}
+
 def price_quote(plan: str, seats: int, countries: list[str] | None = None) -> dict:
     if plan not in PLANS:
         raise ValueError('Choose a valid country plan.')
@@ -49,7 +111,7 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None) -> di
     elif plan in ('europe', 'custom'):
         total = None
     elif plan == 'usa-canada':
-        total = Decimal(22 if seats == 1 else 40 if seats == 2 else 18 * seats)
+        total = PRICES['usa_1'] if seats == 1 else PRICES['usa_2'] if seats == 2 else PRICES['usa_per'] * seats
     else:
         total = Decimal(PLANS[plan]['price']) * seats
     return {'plan': plan, 'plan_name': PLANS[plan]['name'], 'users': seats,
@@ -60,4 +122,5 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None) -> di
             'catalog_version': CATALOG_VERSION}
 
 def client_catalog() -> dict:
-    return {'version': CATALOG_VERSION, 'plans': PLANS, 'europe_totals': {str(k): str(v) for k,v in EUROPE_TOTALS.items()}, 'countries': EUROPE_COUNTRIES}
+    return {'version': CATALOG_VERSION, 'plans': PLANS, 'europe_totals': {str(k): str(v) for k,v in EUROPE_TOTALS.items()}, 'countries': EUROPE_COUNTRIES,
+            'usa': {'one': str(PRICES['usa_1']), 'two': str(PRICES['usa_2']), 'per': str(PRICES['usa_per'])}}

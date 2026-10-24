@@ -6,8 +6,9 @@ or payment gateway fee is added by this website.
 
 ## USA/Canada
 
-1 user = $22. Two users = $38 TOTAL. Three or more = $15 x user count.
-The earlier $30 two-user price was superseded by the owner's later $38 instruction.
+1 user = $22. Two users = $40 TOTAL. Three or more = $18 x user count (defaults).
+Earlier $30 and $38 two-user prices were superseded by the owner's later instructions.
+All prices can now be changed by an admin at /admin/pricing (stored in mkt_settings); app/catalog.py holds the defaults.
 
 ## Fixed per-user plans
 

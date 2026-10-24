@@ -1,0 +1,20 @@
+{% extends 'admin_base.html' %}{% block content %}
+<div class="admin-heading"><div><span class="eyebrow">WEBSITE PRICES</span><h1>Pricing.</h1><p>Change the monthly prices shown across the website. Saving updates the pricing cards, country pages, calculator, order form quotes and the AI chat assistant within about 30 seconds. Enquiries that were already submitted keep the quote they were sent with.</p></div><a href="/admin" class="button secondary">Back to inbox</a></div>
+{% if saved %}<div class="price-alert ok" role="status">Prices saved and published.</div>{% endif %}
+{% if reset %}<div class="price-alert ok" role="status">Prices reset to the original defaults.</div>{% endif %}
+{% if error %}<div class="price-alert bad" role="alert">{{ error }} Nothing was saved.</div>{% endif %}
+<div class="price-preview card"><strong>Live examples</strong><span>USA &amp; Canada: 1 user ${{ preview.usa_1 }} &middot; 2 users ${{ preview.usa_2 }} &middot; 3 users ${{ preview.usa_3_total }} &middot; 5 users ${{ preview.usa_5_total }}</span><span>UK ${{ preview.uk }} &middot; Australia ${{ preview.australia }} &middot; Japan ${{ preview.japan }} &middot; Global ${{ preview.global }} &middot; UK to Europe from ${{ preview.eu_1 }} (per user / month)</span></div>
+<form method="post" action="/admin/pricing" class="price-form" novalidate>
+<input type="hidden" name="csrf" value="{{ admin.csrf }}">
+{% for group, fields in groups %}
+<fieldset class="card price-group"><legend>{{ group }}</legend>
+{% if group == 'USA & Canada' %}<p class="muted">1 and 2 users are monthly totals. From 3 users, the price is per user (3 users = 3 &times; this price).</p>{% elif group == 'UK to Europe' %}<p class="muted">Price per user per month, by how many European destinations are selected.</p>{% endif %}
+<div class="price-grid">{% for f in fields %}
+<label class="price-field"><span>{{ f.label }}</span><span class="price-input"><b>$</b><input name="{{ f.key }}" value="{{ f.value }}" inputmode="decimal" required autocomplete="off" aria-describedby="hint-{{ f.key }}"></span><small id="hint-{{ f.key }}">Default ${{ f.default }} &middot; allowed {{ f.min }}&ndash;{{ f.max }}</small></label>
+{% endfor %}</div></fieldset>
+{% endfor %}
+<div class="price-actions"><button class="button" type="submit" name="action" value="save">Save &amp; publish prices</button>
+<button class="button secondary" type="submit" name="action" value="reset" data-confirm="Reset every price to the original defaults?">Reset to defaults</button></div>
+</form>
+{% if row %}<p class="muted price-meta">Last changed {{ row.updated_at|stamp }} by {{ row.updated_by }}. Every change is recorded in <a href="/admin/activity">Activity</a>.</p>{% else %}<p class="muted price-meta">Currently showing the original default prices.</p>{% endif %}
+{% endblock %}

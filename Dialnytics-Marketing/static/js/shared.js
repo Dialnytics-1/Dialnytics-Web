@@ -5,11 +5,15 @@ export function getQuote(catalog, plan, users, count = 1) {
   if (!catalog.plans[plan] || !Number.isInteger(users) || users < 1 || users > 100) throw new Error('Choose a valid plan and 1 to 100 users.');
   let cents;
   if (['europe','custom'].includes(plan)) return { total: null, rate: null };
-  if (plan === 'usa-canada') cents = users === 1 ? 2200 : users === 2 ? 3800 : users * 1500;
+  if (plan === 'usa-canada') {
+    // Prices come from the server catalog (admin-managed); never hardcode them here.
+    const usa = catalog.usa || { one: catalog.plans[plan].price, two: catalog.plans[plan].price * 2, per: catalog.plans[plan].price };
+    cents = Math.round(Number(users === 1 ? usa.one : users === 2 ? usa.two : usa.per) * 100) * (users > 2 ? users : 1);
+  }
   else if (plan === 'uk-to-europe') {
     if (!catalog.europe_totals[String(count)]) throw new Error('Choose 1 to 6 European destinations.');
     cents = Math.round(Number(catalog.europe_totals[String(count)]) * 100) * users;
-  } else cents = catalog.plans[plan].price * users * 100;
+  } else cents = Math.round(catalog.plans[plan].price * 100) * users;
   return { total: cents / 100, rate: cents / 100 / users };
 }
 export function quantity(input) {
