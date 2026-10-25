@@ -170,7 +170,8 @@ def test_tour_is_frameable_only_on_same_origin(client):
     assert r.headers['x-frame-options']=='SAMEORIGIN'
     assert "frame-ancestors 'self'" in r.headers['content-security-policy']
     assert client.get('/').headers['x-frame-options']=='DENY'
-    assert '/static/product-tour/index.html' in client.get('/product/tour/').text
+    page=client.get('/product/tour/').text
+    assert '/static/product-tour/dialnytics-product-tour.mp4' in page and '/static/js/tour-video.js' in page
 
 def test_separate_database_guard(tmp_path):
     from app.database import make_database

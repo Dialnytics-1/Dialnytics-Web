@@ -1,12 +1,10 @@
 {% extends 'base.html' %}{% from 'macros.html' import icon,cta %}
-{% block content %}<section class="page-hero"><div class="container centered"><span class="eyebrow">PRODUCT TOUR</span><h1>One workspace.<br>A more connected workflow.</h1><p>A complete walkthrough of the Dialnytics dialer in under 5 minutes: sign in, dashboard, calling and every in-call control, incoming calls, Call Logs, Recordings, Contacts, CRM, Power Dialer, Campaigns, Scripts, Billing and every option in the profile menu. Screens show demo data. Use the chapter menu to jump to any part, or request a 15-minute live demonstration.</p></div></section><section class="section pt0"><div class="container"><div class="tour-tabs" role="tablist" aria-label="Product tour chapters">{% for name in ['Call','Organise','Work your queue','Review'] %}<button type="button" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}" aria-controls="tour-panel-{{ loop.index0 }}" id="tour-tab-{{ loop.index0 }}" data-tour-tab="{{ loop.index0 }}" tabindex="{{ 0 if loop.first else -1 }}">0{{ loop.index }} {{ name }}</button>{% endfor %}</div><div class="tour-display">
-    <div class="dialnytics-tour-player">
-        <iframe
-            src="/static/product-tour/index.html"
-            title="Dialnytics Animated Product Tour"
-            loading="lazy"
-            allow="autoplay; fullscreen"
-            allowfullscreen>
-        </iframe>
-    </div>
-</div>{% for title,desc,link in [('Make the call with context.','Use your dedicated caller ID and see customer details alongside the browser calling workflow.','calling'),('Keep your leads useful.','Review CRM details, accurate consent records and notes before choosing who to contact.','crm'),('Move through selected leads.','Use your queue controls and save notes for each call. Power Dialer is included in the plan.','campaigns'),('Understand the recorded activity.','Review Call Logs and time-based dashboard counts after your calling session.','dashboard')] %}<div class="tour-panel" id="tour-panel-{{ loop.index0 }}" role="tabpanel" aria-labelledby="tour-tab-{{ loop.index0 }}" {% if not loop.first %}hidden{% endif %}><div><span class="eyebrow">CHAPTER 0{{ loop.index }}</span><h2>{{ title }}</h2></div><div><p>{{ desc }}</p><a class="text-link" href="/product/{{ link }}/">Explore this workflow {{ icon('arrow') }}</a></div></div>{% endfor %}</div></section>{{ cta() }}{% endblock %}
+{% block head %}<script src="/static/js/tour-video.js?v=1" defer></script>{% endblock %}
+{% block content %}<section class="page-hero"><div class="container centered"><span class="eyebrow">PRODUCT TOUR</span><h1>See the whole dialer<br>in one walkthrough.</h1><p>A full tour of the Dialnytics dialer in 11 chapters: calling, two calls and conference, transfers, incoming calls, call logs and recordings, messages, CRM and Power Dialer, scripts and campaigns, live team view and your account. Jump to any chapter below, or watch at up to 2x speed. Screens show demo data.</p></div></section>
+<section class="section pt0"><div class="container"><div class="tour-display">
+<div class="tv" data-tour-video>
+<video src="/static/product-tour/dialnytics-product-tour.mp4" poster="/static/product-tour/poster.jpg" preload="metadata" playsinline controls aria-label="Dialnytics product tour video"></video>
+</div></div>
+<div class="tv-head"><span class="eyebrow">CHAPTERS</span><h2>Jump to the part you need.</h2><p>Click any chapter to start the video from there. Use the speed button in the player to watch at 1.25x, 1.5x or 2x.</p></div>
+<div class="tv-cards" data-tour-chapters></div>
+</div></section>{{ cta() }}{% endblock %}
