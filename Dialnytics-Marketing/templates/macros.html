@@ -68,6 +68,7 @@
   <fieldset class="calc2-addons"><legend>Add-ons <small>per user / month</small></legend>
   {% for a in addons %}<label class="addon-opt{% if not a.live %} soon{% endif %}"><input type="checkbox" value="{{ a.key }}" data-addon{% if not a.live %} disabled{% endif %}><span class="addon-box" aria-hidden="true">{{ icon('check') }}</span><span class="addon-text"><strong>{{ a.name }}</strong><small>{{ a.note }}</small></span><span class="addon-price">{% if a.live %}+${{ a.price }}{% else %}<em>Coming soon</em>{% endif %}</span></label>{% endfor %}
   </fieldset>
+  <p class="addon-note" data-sms-note hidden>{{ icon('message') }}<span><strong>A2P 10DLC registration required.</strong> US carriers ask every business to register before texting. We submit it for you and switch texting on once approved. A one-time ${{ pricing.sms_setup }} fee is added to your first payment.</span></p>
  </div>
  <div class="calc2-result" aria-live="polite">
   <span class="eyebrow light">YOUR MONTHLY TOTAL</span>

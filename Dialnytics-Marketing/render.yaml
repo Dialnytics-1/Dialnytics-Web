@@ -38,6 +38,10 @@ services:
         value: true
       - key: ANTHROPIC_API_KEY
         sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: AI_MODEL
         value: claude-haiku-5-5
       - key: CHAT_WIDGET_ENABLED

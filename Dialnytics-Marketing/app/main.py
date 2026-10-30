@@ -18,6 +18,8 @@ from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, c
 from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, BLOG_POSTS, refresh_price_text
 from .mail import deliver_one
 from .chat_routes import register_chat
+from .payments import checkout_params, create_checkout, verify_webhook
+from .tools import TOOLS, TOOL_MAP
 
 log=logging.getLogger('dialnytics.marketing')
 STATUSES=['new','contacted','awaiting_payment','paid','demo_confirmed','closed','spam']
@@ -205,7 +207,7 @@ def create_app(settings=None):
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
              'catalog':client_catalog(),'pricing':price_view(),'addons':addon_view(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
-             'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'page_title':'Business calling, without the extra layers.',
+             'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'card_checkout':settings.stripe_ready,'page_title':'Business calling, without the extra layers.',
              'description':'Unlimited business calling, dedicated caller ID, CRM, Power Dialer and recording. Clear prices. A human setup process.',
              **(context or {})}
         response=templates.TemplateResponse(request=request,name=name,context=ctx,status_code=status)
@@ -278,12 +280,19 @@ def create_app(settings=None):
         if plan not in PLANS: raise HTTPException(404,'Country plan not found.')
         title={'usa':'USA','canada':'Canada'}.get(country,PLANS[plan]['name'])
         return render(request,'country.html',{'plan_slug':plan,'plan':PLANS[plan],'country_name':title,'page_title':title+' business calling'})
+    @app.get('/tools/',response_class=HTMLResponse)
+    def tools_hub(request:Request): return render(request,'tools.html',{'page_title':'Free tools for calling teams','description':'Free browser tools: best time to call, A2P 10DLC quiz, follow-up planner, number cleaner, staffing calculator, area codes, SMS counter and call scripts.','tools':TOOLS})
+    @app.get('/tools/{slug}/',response_class=HTMLResponse)
+    def tool_page(request:Request,slug:str):
+        if slug not in TOOL_MAP: raise HTTPException(404,'Tool not found.')
+        t=TOOL_MAP[slug]
+        return render(request,'tool.html',{'page_title':t[1],'description':t[2],'tool':t,'tools':TOOLS})
     @app.get('/product/tour/',response_class=HTMLResponse)
     def tour(request:Request): return render(request,'tour.html',{'page_title':'A closer look at your calling workflow.'})
     @app.get('/faq/',response_class=HTMLResponse)
     def faq_page(request:Request): return render(request,'faq.html',{'page_title':'A few answers before your next call.'})
     @app.get('/book-demo/',response_class=HTMLResponse)
-    def demo(request:Request): return render(request,'form.html',{'kind':'demo','page_title':'See Dialnytics in 15 minutes.','form_title':'Request your guided demo','description':'Tell us what your team needs. We will send you a WhatsApp message to confirm the date and time of your 15-minute demo.'})
+    def demo(request:Request): return render(request,'form.html',{'kind':'demo','page_title':'Book a demo or ask for a trial.','form_title':'Request a demo or trial','description':'Tell us what your team needs. We will message you on WhatsApp to confirm a 15-minute demo. Short trials are offered case by case after we review your business.'})
     @app.get('/contact/',response_class=HTMLResponse)
     def contact(request:Request): return render(request,'form.html',{'kind':'contact','page_title':"Let's talk about your next step.",'form_title':'Send us a message'})
     @app.get('/support/',response_class=HTMLResponse)
@@ -292,6 +301,8 @@ def create_app(settings=None):
     def quote_page(request:Request): return render(request,'form.html',{'kind':'quote','page_title':'A plan built around your destinations.','form_title':'Request a custom quote'})
     @app.get('/trial-and-demo/')
     def old_demo(): return RedirectResponse('/book-demo/',status_code=301)
+    @app.get('/roadmap/')
+    def old_roadmap(): return RedirectResponse('/product/',status_code=301)
     @app.get('/request-trial/')
     def no_trial(): return RedirectResponse('/book-demo/',status_code=301)
     @app.get('/search/',response_class=HTMLResponse)
@@ -342,8 +353,14 @@ def create_app(settings=None):
                 if row.details.get('taxes_included'): text_lines.append('Prices include taxes.')
             if row.kind=='demo': text_lines.append('Please confirm the timing of my 15-minute demo.')
             text_lines.append('Please confirm the next steps.');msg='\n'.join(text_lines)
-            return {'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
-                    'whatsapp_url':'https://wa.me/'+BUSINESS['whatsapp']+'?'+urlencode({'text':msg}),'whatsapp_message':msg}
+            out={'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
+                 'whatsapp_url':'https://wa.me/'+BUSINESS['whatsapp']+'?'+urlencode({'text':msg}),'whatsapp_message':msg}
+            if row.kind=='order' and row.details.get('payment')=='stripe' and settings.stripe_ready and row.details.get('monthly_total') and row.status=='new':
+                try:
+                    session=create_checkout(settings.stripe_secret_key,checkout_params(row.details,row.reference,row.email,settings.base_url,row.details['plan']),'dny-'+row.reference)
+                    out['checkout_url']=session.get('url')
+                except RuntimeError as exc: out['checkout_error']=str(exc)+' Continue on WhatsApp and we will send a card payment link.'
+            return out
         with DB() as db:
             existing=db.scalar(select(Submission).where(Submission.idempotency_key==key))
             if existing:
@@ -482,6 +499,41 @@ def create_app(settings=None):
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
 
+    @app.post('/webhooks/stripe')
+    async def stripe_webhook(request:Request):
+        if not settings.stripe_ready: raise HTTPException(404,'Not found.')
+        body=await request.body()
+        try: event=verify_webhook(body,request.headers.get('stripe-signature',''),settings.stripe_webhook_secret)
+        except (ValueError,json.JSONDecodeError): raise HTTPException(400,'Invalid signature.')
+        obj=(event.get('data') or {}).get('object') or {}
+        kind=event.get('type','')
+        ref=obj.get('client_reference_id') or (obj.get('metadata') or {}).get('reference') or ''
+        if not ref: return {'received':True}
+        with DB.begin() as db:
+            row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order'))
+            if not row: return {'received':True}
+            details=dict(row.details or {}); card=dict(details.get('card_payment') or {})
+            if kind=='checkout.session.completed' and obj.get('payment_status') in ('paid','no_payment_required'):
+                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),paid_at=now().isoformat(),status='active')
+                row.status='paid'
+                db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Review the account, then activate.',author='Stripe'))
+            elif kind=='customer.subscription.deleted':
+                card.update(status='cancelled',cancelled_at=now().isoformat())
+                db.add(Note(submission_id=row.id,body='Stripe subscription cancelled.',author='Stripe'))
+            elif kind=='invoice.payment_failed':
+                card.update(status='payment_failed',failed_at=now().isoformat())
+                db.add(Note(submission_id=row.id,body='Stripe renewal payment failed.',author='Stripe'))
+            else: return {'received':True}
+            details['card_payment']=card; row.details=details; row.updated_at=now()
+        return {'received':True}
+
+    @app.get('/order/thanks/',response_class=HTMLResponse)
+    def order_thanks(request:Request,ref:str=''):
+        row=None
+        if ref and len(ref)<=32:
+            with DB() as db: row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order'))
+        return render(request,'thanks.html',{'page_title':'Thank you for your order','row':row})
+
     @app.post('/api/newsletter')
     def newsletter(request:Request,data:NewsletterData):
         require_public_csrf(request)
@@ -542,7 +594,7 @@ def create_app(settings=None):
 
     register_chat(app,settings,DB,render,require_public_csrf,rate_limit,admin_session,admin_required,audit)
 
-    special=['/','/pricing/','/numbers/','/get-started/','/book-demo/','/contact/','/support/','/custom-quote/','/faq/','/product/tour/']
+    special=['/','/pricing/','/numbers/','/get-started/','/book-demo/','/contact/','/support/','/custom-quote/','/faq/','/product/tour/','/tools/']+['/tools/'+t[0]+'/' for t in TOOLS]
     all_paths=sorted(set(special+list(PAGES)+list(COLLECTIONS)+['/numbers/'+s+'/' for s in list(PLANS)+['usa','canada']]+['/get-started/'+s+'/' for s in PLANS]))
     app.state.public_paths=all_paths
     @app.get('/sitemap.xml')

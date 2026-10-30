@@ -18,6 +18,7 @@ if (root) {
     $('[data-addon-line]').textContent = money(extras.monthly);
     $('[data-total]').textContent = quote.total === null ? 'Custom quote' : money(quote.total + extras.monthly);
     $('[data-onetime-row]').hidden = !extras.oneTime;
+    $('[data-sms-note]').hidden = !extras.keys.includes('sms');
     $('[data-onetime]').textContent = money(extras.oneTime);
     $('[data-rate]').textContent = quote.rate === null
       ? 'We confirm a tailored price with you before payment.'

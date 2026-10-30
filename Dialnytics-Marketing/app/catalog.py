@@ -27,9 +27,9 @@ ADDONS = [
     {'key': 'campaigns', 'name': 'Campaigns & Power Dialer', 'field': 'addon_campaigns', 'live': True, 'page': '/product/campaigns/',
      'note': 'Build lists from your CRM and let the dialer call them one after another.'},
     {'key': 'sms', 'name': 'SMS texting', 'field': 'addon_sms', 'live': True, 'page': '/product/sms/',
-     'note': '300 texts per user each month from your business number. One-time registration fee applies.'},
-    {'key': 'ai', 'name': 'AI insights', 'field': 'addon_ai', 'live': False, 'page': '/product/ai-insights/',
-     'note': 'Call summaries and transcripts. Coming soon, not available to order yet.'},
+     'note': '300 texts per user each month from your business number. Needs A2P 10DLC registration (one-time fee).'},
+    {'key': 'ai', 'name': 'AI call insights', 'field': 'addon_ai', 'live': True, 'page': '/product/ai-insights/',
+     'note': 'Summary, transcript and coaching tips after each call.'},
 ]
 ADDON_KEYS = [a['key'] for a in ADDONS]
 ORDERABLE_ADDONS = [a['key'] for a in ADDONS if a['live']]
@@ -68,7 +68,7 @@ PRICE_FIELDS = [
     ('addon_recording', 'Call recording (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('addon_campaigns', 'Campaigns & Power Dialer (per user / month)', 'Add-ons', '8', '0', '1000'),
     ('addon_sms', 'SMS texting (per user / month)', 'Add-ons', '8', '0', '1000'),
-    ('addon_ai', 'AI insights (per user / month, coming soon)', 'Add-ons', '5', '0', '1000'),
+    ('addon_ai', 'AI call insights (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('sms_setup', 'SMS registration (one-time, per account)', 'Add-ons', '30', '0', '5000'),
 ]
 DEFAULT_PRICES = {k: Decimal(d) for k, _, _, d, _, _ in PRICE_FIELDS}

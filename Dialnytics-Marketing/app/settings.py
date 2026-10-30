@@ -34,6 +34,11 @@ class Settings:
     admin_whatsapp: str = field(default_factory=lambda: os.getenv('ADMIN_WHATSAPP_NUMBER','').strip())
     wa_alert_template: str = field(default_factory=lambda: os.getenv('WHATSAPP_ALERT_TEMPLATE','').strip())
     wa_alert_lang: str = field(default_factory=lambda: os.getenv('WHATSAPP_ALERT_TEMPLATE_LANG','en').strip())
+    # Card checkout (Stripe). Off unless both are set. Never expose these to the browser.
+    stripe_secret_key: str = field(default_factory=lambda: os.getenv('STRIPE_SECRET_KEY','').strip())
+    stripe_webhook_secret: str = field(default_factory=lambda: os.getenv('STRIPE_WEBHOOK_SECRET','').strip())
+    @property
+    def stripe_ready(self): return self.stripe_secret_key.startswith(('sk_live_','sk_test_','rk_live_','rk_test_')) and self.stripe_webhook_secret.startswith('whsec_')
     @property
     def ai_ready(self): return bool(self.anthropic_key)
     @property

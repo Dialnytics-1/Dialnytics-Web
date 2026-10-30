@@ -69,8 +69,8 @@ def test_internal_links(client,app):
 def test_not_offered_routes(client):
     assert client.get('/refer-and-earn/').status_code==404
     sms=client.get('/product/sms/').text;assert 'A2P 10DLC' in sms and 'Not currently available' not in sms
-    for path in ['/product/ai-insights/','/product/live-captions/','/product/floating-phone/']:
-        assert 'Not currently available' in client.get(path).text
+    for path in ['/product/ai-insights/','/product/live-captions/','/product/floating-phone/','/product/custom-fields/','/product/admin-portal/']:
+        assert 'Not currently available' not in client.get(path).text
 
 def test_save_and_idempotency(client,app):
     p=request_payload()
@@ -267,18 +267,18 @@ def test_addons_quote_and_order(client,app):
     q=price_quote('uk',3,addons=['recording','sms'])
     assert q['plan_total']=='87.00' and q['addons_total']=='39.00' and q['monthly_total']=='126.00'
     assert q['one_time_total']=='30.00' and q['first_payment']=='156.00' and q['taxes_included'] is True
-    with pytest.raises(ValueError): price_quote('uk',1,addons=['ai'])
+    assert price_quote('uk',1,addons=['ai'])['addons'][0]['key']=='ai'
     with pytest.raises(ValueError): price_quote('uk',1,addons=['bogus'])
     p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=3,payment='bank',addons=['recording','sms'])
     r=submit(client,p);assert r.status_code==200,r.text
     assert r.json()['quote']['monthly_total']=='126.00'
     assert 'Add-ons: Call recording, SMS texting' in r.json()['whatsapp_message']
-    p['idempotency_key']=str(uuid.uuid4());p['addons']=['ai']
+    p['idempotency_key']=str(uuid.uuid4());p['addons']=['bogus']
     assert submit(client,p).status_code==422
 
 def test_home_sections(client):
     t=client.get('/').text
-    for needle in ['data-calculator','Taxes included','A2P 10DLC','What happens to your request','Why we built'.upper(),'Watch product tour','Book a demo','newsletter-form','wa-fab','/static/img/product/crm.webp','Coming soon']:
+    for needle in ['data-calculator','Taxes included','A2P 10DLC','What happens to your request','Why we built'.upper(),'Watch product tour','Book a demo','newsletter-form','wa-fab','/static/img/product/crm.webp','data-sms-note']:
         assert needle in t,needle
 
 def test_newsletter(client,app):
@@ -290,3 +290,34 @@ def test_newsletter(client,app):
     assert client.post('/api/newsletter',json=body,headers={'X-CSRF-Token':token}).status_code==200
     with app.state.DB() as db:
         rows=db.scalars(select(Submission).where(Submission.kind=='newsletter')).all();assert len(rows)==1 and rows[0].email=='news@example.org'
+
+
+def test_tools_pages(client):
+    from app.tools import TOOLS
+    hub=client.get('/tools/');assert hub.status_code==200
+    for slug,*_ in TOOLS:
+        r=client.get(f'/tools/{slug}/');assert r.status_code==200,slug;assert f'data-tool="{slug}"' in r.text
+    assert client.get('/tools/nope/').status_code==404
+    assert client.get('/static/tools/area-codes.json').json()['212'][1]=='US'
+
+def test_stripe_helpers():
+    import hmac,hashlib,json,time
+    from app.catalog import price_quote
+    from app.payments import checkout_params, verify_webhook
+    q=price_quote('uk',2,addons=['recording','sms'])
+    params=dict(checkout_params(q,'DNY-1','a@b.co','https://dialnytics.com','uk'))
+    assert params['mode']=='subscription' and params['client_reference_id']=='DNY-1'
+    assert params['line_items[0][price_data][unit_amount]']=='5800'
+    assert params['line_items[3][price_data][unit_amount]']=='3000' and 'line_items[3][price_data][recurring][interval]' not in params
+    body=json.dumps({'type':'x'}).encode(); t=int(time.time())
+    sig=hmac.new(b'whsec_test',f'{t}.'.encode()+body,hashlib.sha256).hexdigest()
+    assert verify_webhook(body,f't={t},v1={sig}','whsec_test')['type']=='x'
+    with pytest.raises(ValueError): verify_webhook(body,f't={t},v1=bad','whsec_test')
+    with pytest.raises(ValueError): verify_webhook(body,f't={t-1000},v1={sig}','whsec_test')
+
+def test_stripe_webhook_off_by_default(client):
+    assert client.post('/webhooks/stripe',content=b'{}').status_code==404
+
+def test_trial_and_stories(client):
+    assert 'Trial request' in client.get('/book-demo/').text
+    r=client.get('/customer-stories/');assert r.status_code==200 and 'real customers' in r.text

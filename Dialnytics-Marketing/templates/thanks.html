@@ -1,0 +1,8 @@
+{% extends 'base.html' %}{% from 'macros.html' import icon %}
+{% block content %}<section class="page-hero compact"><div class="container narrow centered">
+{% if row and row.status == 'paid' %}<span class="eyebrow">PAYMENT RECEIVED</span><h1>Thank you. Your payment went through.</h1><p>We are now reviewing your account and setting up your number and login. We will message you on WhatsApp, usually within 10-15 minutes.</p>
+{% else %}<span class="eyebrow">THANK YOU</span><h1>We are confirming your payment.</h1><p>Stripe emails you a receipt once the payment is complete. Next, we review your account and set up your number and login, then message you on WhatsApp.</p>{% endif %}
+{% if row %}<div class="reference-box">Your reference<strong>{{ row.reference }}</strong></div>{% endif %}
+<div class="hm-cta center"><a class="button" href="https://wa.me/{{ business.whatsapp }}{% if row %}?text={{ ('Hello Dialnytics, my order reference is ' ~ row.reference ~ '. I have paid by card.')|urlencode }}{% endif %}" target="_blank" rel="noopener">{{ icon('whatsapp') }} Message us on WhatsApp</a><a class="tour-link" href="/product/tour/">{{ icon('play') }} Watch product tour</a></div>
+<p class="caption">Card payments renew monthly. You can cancel before the next renewal by messaging us. <a href="/legal/billing-refund-cancellation/">Billing policy</a></p>
+</div></section>{% endblock %}

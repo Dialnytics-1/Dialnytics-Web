@@ -33,6 +33,7 @@ function update() {
   const extras = addonQuote(catalog, selectedAddons(), n);
   document.getElementById('summary-addons').textContent=money(extras.monthly);
   document.getElementById('summary-onetime-row').hidden=!extras.oneTime;
+  const smsNote=document.querySelector('[data-sms-note]'); if(smsNote) smsNote.hidden=!extras.keys.includes('sms');
   document.getElementById('summary-onetime').textContent=money(extras.oneTime);
   document.getElementById('summary-addon-names').textContent=extras.lines.length ? 'Add-ons: '+extras.lines.map(l=>l.name).join(', ') : '';
   document.getElementById('summary-total').textContent=quote.total===null ? 'Custom quote' : money(quote.total+extras.monthly);
@@ -93,6 +94,8 @@ form.addEventListener('submit',async event=>{
     document.getElementById('order-reference').textContent=data.reference;
     document.getElementById('order-whatsapp').href=data.whatsapp_url;
     if(data.quote && data.quote.monthly_total!==null)document.getElementById('summary-total').textContent=money(Number(data.quote.monthly_total));
+    if(data.checkout_url){submit.textContent='Opening secure card checkout...';window.location.assign(data.checkout_url);return;}
+    if(data.checkout_error){const n=document.getElementById('order-checkout-note');n.textContent=data.checkout_error;n.hidden=false;}
     navigate(4);
   }catch(err){showError(err.message);submit.disabled=false;back.disabled=false;submit.textContent='Save enquiry & continue';}
   finally{busy=false;}

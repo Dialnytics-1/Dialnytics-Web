@@ -94,10 +94,11 @@ def knowledge(base_url: str) -> str:
         'Calling works in the browser (computer or phone browser), no SIM or app needed. Use a headset for best quality.',
         'HOW IT WORKS: customer shares details -> team confirms number availability and requirements on WhatsApp '
         '-> payment -> account activated 24/7 within 10-15 minutes after payment confirmation -> login details sent.',
-        'PAYMENT: Bank Transfer, USDT, or Credit/Debit card via a secure Stripe link. The team sends payment '
-        'instructions on WhatsApp. The website/chat never takes payment.',
-        'DEMO ACCOUNT / FREE TRIAL: NOT available. Instead offer the product tour: ' + base_url + '/product/tour/ '
-        '(full walkthrough of the dialer in under 5 minutes) and answer their questions.',
+        'PAYMENT: Bank Transfer, USDT, or Credit/Debit card. Card payments renew monthly and can be cancelled before the next renewal. '
+        'The chat never takes payment details.',
+        'DEMO ACCOUNT / FREE TRIAL: there is no self-service demo account. A short trial may be offered case by case after the team '
+        'reviews the request; never promise one, say the team decides. Offer the product tour: ' + base_url + '/product/tour/ '
+        'and a 15-minute guided demo: ' + base_url + '/book-demo/ .',
         'TO BUY: the customer shares Full Name, Email Address, Phone Number and Campaign Name; once these are received '
         'and payment is confirmed, the account is activated within 10-15 minutes.',
         'NUMBERS: a dedicated caller ID is included; the team confirms availability of a preferred country/area '
@@ -108,8 +109,10 @@ def knowledge(base_url: str) -> str:
         f"{BUSINESS['legal_name']} (UK company {BUSINESS['company_number']}). Registered office: {BUSINESS['address']} "
         "(registered office only, not a walk-in support location; support is online via WhatsApp/email).",
         'REFUNDS: final written refund/cancellation terms are provided by the team before payment; do not promise refunds.',
-        'VOICEMAIL is included. SMS texting is a live paid add-on (US texting needs A2P 10DLC business registration). '
-        'NOT CONFIRMED IN CHAT: AI transcripts/live captions/Floating Phone (coming soon), discounts, minimum contracts, '
+        'VOICEMAIL is included. SMS texting is a live paid add-on (texting needs A2P 10DLC business registration, one-time fee). '
+        'Also in the dialer: live captions, floating phone (Chrome/Edge), custom fields, search everything and a Customer Admin Portal for team owners. '
+        
+        'NOT CONFIRMED IN CHAT: discounts, minimum contracts, '
         'specific number availability. For these say the team will confirm.',
     ]
     return '\n'.join(lines)
