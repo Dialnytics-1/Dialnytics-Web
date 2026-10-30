@@ -499,6 +499,63 @@ def create_app(settings=None):
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
 
+    @app.get('/admin/confirmed-orders', response_class=HTMLResponse)
+    def admin_confirmed_orders(request: Request, q: str = '', page: int = 1):
+        sess = admin_session(request)
+        if not sess:
+            return RedirectResponse('/admin/login', status_code=303)
+        q = q.strip()[:150]
+        page = max(1, min(page, 100000))
+        with DB() as db:
+            rows = db.scalars(select(Submission).where(
+                Submission.kind == 'order', Submission.status == 'paid'
+            ).order_by(Submission.updated_at.desc())).all()
+            confirmed = []
+            for row in rows:
+                details = row.details or {}
+                card = details.get('card_payment') or {}
+                # Only verified Stripe webhook records qualify, never manual status changes.
+                if not card.get('session') or not card.get('paid_at'):
+                    continue
+                if q and q.lower() not in ' '.join((row.reference, row.name, row.email,
+                          row.phone, str(details.get('plan_name', '')))).lower():
+                    continue
+                confirmed.append({'row': row, 'card': card, 'details': details})
+        count = len(confirmed)
+        pages = max(1, math.ceil(count / 25))
+        page = min(page, pages)
+        return render(request, 'admin_confirmed_orders.html', {
+            'page_title': 'Confirmed Orders', 'admin': sess,
+            'orders': confirmed[(page - 1) * 25:page * 25],
+            'count': count, 'page': page, 'pages': pages, 'q': q,
+            'pager_query': urlencode({'q': q}),
+        })
+
+    @app.get('/api/integrations/confirmed-orders')
+    def integration_confirmed_orders(request: Request):
+        """Read-only paid orders for the dialer admin. Never accepts payment claims."""
+        import os
+        token = os.getenv('DIALER_ORDERS_API_TOKEN', '').strip()
+        supplied = request.headers.get('authorization', '')
+        if len(token) < 32 or not hmac.compare_digest(supplied, 'Bearer ' + token):
+            raise HTTPException(401, 'Unauthorized')
+        with DB() as db:
+            rows = db.scalars(select(Submission).where(Submission.kind == 'order', Submission.status == 'paid').order_by(Submission.created_at.desc()).limit(500)).all()
+            orders = []
+            for row in rows:
+                details = row.details or {}
+                card = details.get('card_payment') or {}
+                if not card.get('session') or not card.get('paid_at'):
+                    continue  # manually marked paid orders are not Stripe-confirmed
+                orders.append({'reference': row.reference, 'name': row.name,
+                               'email': row.email, 'phone': row.phone,
+                               'plan': details.get('plan_name', ''), 'users': details.get('users', 1),
+                               'amount_usd': (card.get('amount_total') or 0) / 100,
+                               'paid_at': card['paid_at'], 'stripe_session': card['session'],
+                               'stripe_customer': card.get('customer', ''),
+                               'stripe_subscription': card.get('subscription', '')})
+        return JSONResponse({'orders': orders}, headers={'Cache-Control': 'no-store'})
+
     @app.post('/webhooks/stripe')
     async def stripe_webhook(request:Request):
         if not settings.stripe_ready: raise HTTPException(404,'Not found.')
@@ -514,7 +571,7 @@ def create_app(settings=None):
             if not row: return {'received':True}
             details=dict(row.details or {}); card=dict(details.get('card_payment') or {})
             if kind=='checkout.session.completed' and obj.get('payment_status') in ('paid','no_payment_required'):
-                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),paid_at=now().isoformat(),status='active')
+                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),currency=obj.get('currency','usd'),paid_at=now().isoformat(),status='active')
                 row.status='paid'
                 db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Review the account, then activate.',author='Stripe'))
             elif kind=='customer.subscription.deleted':
