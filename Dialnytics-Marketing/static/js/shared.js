@@ -63,3 +63,11 @@ export async function copyText(text, button) {
     else { button.textContent='Select and copy the message above'; area.addEventListener('blur',()=>area.remove(),{once:true}); }
   }
 }
+// Add-ons are priced per user per month; SMS also has a one-time registration fee.
+export function addonQuote(catalog, keys, users) {
+  const list = (catalog.addons || []).filter(a => a.live && keys.includes(a.key));
+  const lines = list.map(a => ({ key: a.key, name: a.name, total: Math.round(Number(a.price) * 100) * users / 100 }));
+  const monthly = lines.reduce((sum, l) => sum + Math.round(l.total * 100), 0) / 100;
+  const oneTime = keys.includes('sms') ? Number(catalog.sms_setup || 0) : 0;
+  return { lines, monthly, oneTime, keys: list.map(a => a.key) };
+}

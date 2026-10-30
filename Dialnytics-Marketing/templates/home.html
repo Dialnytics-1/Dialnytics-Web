@@ -1,13 +1,148 @@
-{% extends 'base.html' %}{% from 'macros.html' import icon,cta,feature_cards,faq_block %}
-{% block head %}<script src="/static/js/hero-dialer.js?v=1" defer></script><script type="application/ld+json">{"@context":"https://schema.org","@type":"Organization","name":"Dialnytics","url":"https://dialnytics.com/","logo":"https://dialnytics.com/static/img/dialnytics-logo.png","description":"Business calling, CRM and Power Dialer in one browser workspace.","email":"admin@dialnytics.co.uk","sameAs":["https://www.facebook.com/people/Dialnytics/61595304934025/"]}</script>{% endblock %}
+{% extends 'base.html' %}{% from 'macros.html' import icon,faq_block,calculator,taxes %}
 {% block content %}
-<section class="hero"><div class="hero-grid-bg"></div><div class="container hero-grid"><div class="hero-copy"><a href="/numbers/uk-to-europe/" class="hero-pill"><span>NEW MARKETS</span> UK to Europe calling {{ icon('arrow') }}</a><h1>More conversations.<br><span class="gradient-text">Less in the way.</span></h1><p>Business calling, CRM and Power Dialer in one browser workspace. Give your team the tools to keep every conversation moving.</p><div class="hero-actions"><a class="button" href="/pricing/">Find your plan {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a 15-min demo</a></div><div class="hero-checks"><span>{{ icon('check') }} Recording included</span><span>{{ icon('check') }} No setup fee</span><span>{{ icon('check') }} No extra charges</span></div></div><div class="hero-visual">{% include 'live-preview.html' %}<div class="floating-chip"><span class="chip-icon">{{ icon('bolt') }}</span><div><strong>Built to keep you moving</strong><span>CRM + Power Dialer + Call Recording</span></div></div></div></div>
-<div class="container hero-bottom"><p>ONE WORKSPACE. YOUR NEXT MARKET.</p><div class="market-strip"><a href="/numbers/usa/"><span class="flag-dot">US</span>USA</a><a href="/numbers/canada/"><span class="flag-dot">CA</span>Canada</a><a href="/numbers/uk/"><span class="flag-dot">UK</span>United Kingdom</a><a href="/numbers/australia/"><span class="flag-dot">AU</span>Australia</a><a href="/numbers/japan/"><span class="flag-dot">JP</span>Japan</a><a href="/numbers/global/">{{ icon('globe') }}Global</a></div></div></section>
-<section class="value-ribbon"><div class="container"><div><strong>${{ pricing.usa_per }}<span>/user</span></strong><span>USA &amp; Canada, 3+ users</span></div><div><strong>7<span> essentials</span></strong><span>Included in every plan</span></div><div><strong>$0<span> setup</span></strong><span>Your plan price is your price</span></div><div><strong>24/7<span> activation</span></strong><span>10-15 min after payment confirmation</span></div></div></section>
-<section class="section"><div class="container"><div class="section-heading split-heading"><div><span class="eyebrow">A MORE CONNECTED WORKDAY</span><h2>Everything around the call.<br>Already in your plan.</h2></div><p>Less switching between tools. More context when it matters. These seven features come with every listed Dialnytics plan.</p></div>{{ feature_cards(features) }}</div></section>
-<section class="section soft-section"><div class="container workflow-grid"><div><span class="eyebrow">FROM A LEAD TO A CONVERSATION</span><h2>Keep the next step<br>in plain sight.</h2><p class="lead">Bring your leads, queue and call notes together. Stay in control of the conversation instead of juggling a disconnected workflow.</p><a href="/product/campaigns/" class="text-link">Explore Power Dialer {{ icon('arrow') }}</a><div class="workflow-points"><div><span>01</span><div><h3>Choose your leads</h3><p>Select eligible CRM records for your queue.</p></div></div><div><span>02</span><div><h3>Make the conversation count</h3><p>Keep details and scripts close while you call.</p></div></div><div><span>03</span><div><h3>Keep a useful record</h3><p>Save the outcome and notes for your next action.</p></div></div></div></div><div class="queue-illustration"><div class="queue-top"><span class="icon-tile">{{ icon('bolt') }}</span><div><small>POWER DIALER</small><h3>One lead. Full context.</h3></div><span class="tiny-badge">Preview</span></div><div class="queue-person"><span class="person-circle">AM</span><h3>Alex Morgan</h3><p>+1 202 555 0148 &middot; Example number</p><span class="status-tag">Ready for follow-up</span></div><div class="note-preview"><span>CALL NOTES</span><p>Confirm the requirements.<br>Agree a clear next step.</p><small>Illustrative notes, not customer data</small></div><div class="queue-actions"><span>Start</span><span>Pause</span><span>Skip next</span></div><p class="caption">Illustrative workflow. Not a live dialer.</p></div></div></section>
-<section class="section"><div class="container"><div class="section-heading centered"><span class="eyebrow">STRAIGHTFORWARD, MONTHLY PRICING</span><h2>Your market. Your team.<br>One clear price.</h2><p>No setup fee. No surprise add-ons for recording or Power Dialer.</p></div><div class="pricing-teasers"><article class="price-teaser"><span class="plan-region">US / CA</span><h3>USA &amp; Canada</h3><p>For one or two users</p><div class="price">${{ pricing.usa_1 }}<span>/month</span></div><p>1 user &middot; 2 users for ${{ pricing.usa_2 }} total</p><a href="/get-started/usa-canada/" class="button secondary full">Choose this plan {{ icon('arrow') }}</a></article><article class="price-teaser featured"><span class="popular-label">FOR GROWING TEAMS</span><span class="plan-region">US / CA TEAM</span><h3>More people. Same tools.</h3><p>Starting at 3 users</p><div class="price">${{ pricing.usa_per }}<span>/user/month</span></div><p>3 users = ${{ pricing.usa_3_total }} total per month</p><a href="/get-started/usa-canada/?users=3" class="button full">Build your team plan {{ icon('arrow') }}</a></article><article class="price-teaser"><span class="plan-region">UK</span><h3>United Kingdom</h3><p>One rate for every user</p><div class="price">${{ pricing.uk }}<span>/user/month</span></div><p>Unlimited calling in your UK plan</p><a href="/get-started/uk/" class="button secondary full">Choose this plan {{ icon('arrow') }}</a></article></div><div class="section-tail"><a href="/pricing/" class="text-link">Australia, Japan, Global &amp; Europe plans {{ icon('arrow') }}</a><small>All prices USD. No extra charges. Destination availability confirmed before payment.</small></div></div></section>
-<section class="section dark-section"><div class="container"><div class="section-heading"><span class="eyebrow light">NOT JUST A NUMBER</span><h2>A workflow for the way you work.</h2><p>Sales, service, appointments and the conversations in between.</p></div><div class="solution-feature-grid">{% for slug,title,copy in [('sales','Sales teams','From a requested enquiry to a clear next step.'),('customer-support','Customer support','Answer with the context the conversation needs.'),('appointments','Appointment teams','Confirm details and keep follow-ups organised.'),('ecommerce','E-commerce','Make order conversations feel more personal.')] %}<a href="/solutions/{{ slug }}/"><span>{{ '%02d'|format(loop.index) }}</span><h3>{{ title }}</h3><p>{{ copy }}</p>{{ icon('arrow') }}</a>{% endfor %}</div><a href="/solutions/" class="text-link light-link">Explore all solutions {{ icon('arrow') }}</a></div></section>
-<section class="section"><div class="container"><div class="section-heading centered"><span class="eyebrow">START WITH A CONVERSATION</span><h2>From plan to first call.</h2></div><div class="steps-grid">{% for title,text in [('Pick your plan','Choose your destinations and number of users.'),('Send your request','Your details are saved with a reference number.'),('Confirm & pay','Arrange payment with our team on WhatsApp.'),('Get connected','Activation in 10-15 minutes after payment confirmation, 24/7.')] %}<div><span class="step-number">0{{ loop.index }}</span><h3>{{ title }}</h3><p>{{ text }}</p></div>{% endfor %}</div></div></section>
-<section class="section soft-section"><div class="container faq-grid"><div><span class="eyebrow">GOOD QUESTIONS</span><h2>Before you<br>make the call.</h2><p>Need to talk it through? We are a WhatsApp message away.</p><a href="/faq/" class="text-link">All questions {{ icon('arrow') }}</a></div>{{ faq_block(faq[:6]) }}</div></section>{{ cta() }}
+{# 1. Hero #}
+<section class="hm-hero"><div class="hm-hero-bg" aria-hidden="true"></div><div class="container hm-hero-grid">
+ <div class="hm-hero-copy">
+  <a href="/numbers/" class="hero-pill"><span>7 MARKETS</span> USA, Canada, UK, Australia, Japan &amp; more {{ icon('arrow') }}</a>
+  <h1>Your business line in every market <span class="gradient-text">you sell to.</span></h1>
+  <p class="hm-lead">Call, text and follow up with customers in the USA, UK, Australia and Japan, right from your browser. One clear price per user.</p>
+  <ul class="hm-bullets">
+   <li>{{ icon('check') }}<span><strong>No hardware.</strong> Works in Chrome, Edge or Safari.</span></li>
+   <li>{{ icon('check') }}<span><strong>Unlimited calling</strong> in your plan countries.</span></li>
+   <li>{{ icon('check') }}<span><strong>From ${{ pricing.from }}/user</strong> per month, taxes included.</span></li>
+  </ul>
+  <div class="hm-cta"><a class="button" href="#calculator">Get started {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><a class="tour-link light" href="/product/tour/">{{ icon('play') }} Watch product tour</a></div>
+ </div>
+ <div class="hm-hero-visual">
+  <figure class="hm-shot"><div class="hm-shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>dialnytics.co.uk</span></div><img src="/static/img/product/dashboard.webp" width="1600" height="692" alt="The Dialnytics dialer: dashboard with today's calls, answer rate and talk time, with the dial pad on the right" fetchpriority="high"></figure>
+  <div class="hm-sms" aria-hidden="true"><div class="hm-sms-head">{{ icon('message') }}<span>New text &middot; +1 (415) 555-0182</span></div><p class="in">Hi! Is the 2-bed apartment still available for a viewing this week?</p><p class="out">Yes, it is. Does Thursday at 4 PM work for you?<small>Delivered</small></p></div>
+  <div class="hm-callchip" aria-hidden="true"><span class="dot"></span><div><strong>On a call &middot; 02:14</strong><small>+44 20 7946 0321 &middot; London</small></div></div>
+  <p class="hm-shot-note">Real dialer screen. Sample data and example numbers.</p>
+ </div>
+</div></section>
+
+{# 3. Stats strip #}
+<section class="hm-stats" aria-label="Dialnytics at a glance"><div class="container hm-stats-row">
+ <div><strong>$0</strong><span>hardware and setup</span></div>
+ <div><strong>7</strong><span>markets to call</span></div>
+ <div><strong>1</strong><span>clear per-user price</span></div>
+ <div><strong>24/7</strong><span>activation, 10-15 min after payment</span></div>
+</div></section>
+
+{# 2. Country number showcase #}
+<section class="section" id="numbers"><div class="container">
+ <div class="section-heading split-heading"><div><span class="eyebrow">LOCAL NUMBERS</span><h2>A number your customers<br>will pick up.</h2></div><p>Call from a local number in the country you sell to. Customers see a familiar caller ID and can call you back at local rates.</p></div>
+ <div class="hm-numbers">
+ {% for slug,flag,label,nums,price_txt in [
+   ('usa-canada','US','USA &amp; Canada',['+1 (212) 555-0147','+1 (416) 555-0123'],'from $'~pricing.usa_per~'/user'),
+   ('uk','GB','United Kingdom',['+44 20 7946 0321','+44 161 496 0754'],'$'~pricing.uk~'/user'),
+   ('australia','AU','Australia',['+61 2 5550 4182','+61 3 7010 2953'],'$'~pricing.australia~'/user'),
+   ('japan','JP','Japan',['+81 3 4500 0147','+81 6 6500 0182'],'$'~pricing.japan~'/user')] %}
+  <article class="hm-num-card"><div class="hm-num-top"><span class="hm-flag">{{ flag }}</span><h3>{{ label|safe }}</h3></div>
+   <ul>{% for n in nums %}<li><span class="hm-num">{{ n }}</span><span class="hm-num-tag">Example</span></li>{% endfor %}</ul>
+   <div class="hm-num-foot"><span><strong>{{ price_txt }}</strong> / month {{ taxes() }}</span><a class="text-link" href="/numbers/{{ slug }}/">See plan {{ icon('arrow') }}</a></div></article>
+ {% endfor %}
+ </div>
+ <p class="caption centered">Example numbers only. Your real number is chosen with you and confirmed before payment.</p>
+</div></section>
+
+{# 4. Onboarding #}
+<section class="section soft-section"><div class="container">
+ <div class="section-heading centered"><span class="eyebrow">GETTING STARTED</span><h2>Four steps to your first call.</h2><p>No hardware to ship and no contracts to sign. A real person from our team walks you through it on WhatsApp.</p></div>
+ <ol class="hm-steps">
+  <li><span class="hm-step-n">01</span>{{ icon('globe') }}<h3>Choose your plan</h3><p>Pick your country, number of users and any add-ons. Send the request in two minutes.</p></li>
+  <li><span class="hm-step-n">02</span>{{ icon('lock') }}<h3>Pay</h3><p>Bank Transfer, USDT or a secure Stripe card link, sent to you on WhatsApp.</p></li>
+  <li><span class="hm-step-n">03</span>{{ icon('shield') }}<h3>Account review &amp; setup</h3><p>We check your details, assign your number and set up your users.</p></li>
+  <li><span class="hm-step-n">04</span>{{ icon('phone') }}<h3>Start calling</h3><p>Log in at dialnytics.co.uk and make your first call. Usually 10-15 minutes after payment.</p></li>
+ </ol>
+ <div class="hm-center-cta"><a class="button" href="#calculator">Get started {{ icon('arrow') }}</a><a class="tour-link" href="/how-it-works/">How it works in detail {{ icon('arrow') }}</a></div>
+</div></section>
+
+{# 5. Feature cards with real screenshots #}
+<section class="section" id="features"><div class="container">
+ <div class="section-heading split-heading"><div><span class="eyebrow">THE WORKSPACE</span><h2>Everything around the call,<br>in one browser tab.</h2></div><p>CRM and voicemail come with every plan. Add recording, Power Dialer and texting when your team needs them.</p></div>
+ <div class="hm-features">
+  <article class="hm-feat wide"><div class="hm-feat-img"><img src="/static/img/product/crm.webp" width="1100" height="665" alt="CRM screen with leads, status, consent and follow-up dates" loading="lazy"></div><div class="hm-feat-body"><span class="badge inc">Included</span><h3>CRM pipeline</h3><p>Every lead with its status, consent and next follow-up. Import a CSV, filter by status and call with one click.</p><a class="text-link" href="/product/crm/">Explore CRM {{ icon('arrow') }}</a></div></article>
+  <article class="hm-feat wide"><div class="hm-feat-img"><img src="/static/img/product/power-dialer.webp" width="1200" height="592" alt="Power Dialer running a queue, with call notes and the live call on the right" loading="lazy"></div><div class="hm-feat-body"><span class="badge add">Add-on &middot; ${{ pricing.addon_campaigns }}/user</span><h3>Campaigns &amp; Power Dialer</h3><p>Pick leads from your CRM and the dialer calls them one after another. Leads marked Do Not Call are left out.</p><a class="text-link" href="/product/campaigns/">Explore Power Dialer {{ icon('arrow') }}</a></div></article>
+  <article class="hm-feat"><div class="hm-feat-img"><img src="/static/img/product/recordings.webp" width="1100" height="665" alt="Recordings list with playback controls for each call" loading="lazy"></div><div class="hm-feat-body"><span class="badge add">Add-on &middot; ${{ pricing.addon_recording }}/user</span><h3>Call recording</h3><p>Play back, download or delete recorded calls. Useful for training and settling disputes.</p><a class="text-link" href="/product/call-recording/">Explore recording {{ icon('arrow') }}</a></div></article>
+  <article class="hm-feat"><div class="hm-feat-img"><img src="/static/img/product/sms.webp" width="1100" height="690" alt="Messages screen with a two-way text conversation" loading="lazy"></div><div class="hm-feat-body"><span class="badge add">Add-on &middot; ${{ pricing.addon_sms }}/user</span><h3>SMS texting</h3><p>Text from your business number. {{ pricing.sms_texts }} texts per user each month, replies land next to your calls.</p><a class="text-link" href="/product/sms/">Explore SMS {{ icon('arrow') }}</a></div></article>
+  <article class="hm-feat soon"><div class="hm-feat-img hm-mock" aria-hidden="true"><div class="mock-ai"><span>{{ icon('sparkle') }} Call summary</span><i style="width:92%"></i><i style="width:78%"></i><i style="width:85%"></i><b>Next step: send the quote by Friday</b></div></div><div class="hm-feat-body"><span class="badge soon">Coming soon</span><h3>AI insights</h3><p>Automatic call summaries and transcripts. Planned as a ${{ pricing.addon_ai }}/user add-on. Not available to order yet.</p><a class="text-link" href="/product/ai-insights/">Read more {{ icon('arrow') }}</a></div></article>
+  <article class="hm-feat soon"><div class="hm-feat-img hm-mock" aria-hidden="true"><div class="mock-float"><span class="mf-dot"></span><strong>+1 (212) 555-0147</strong><small>Calling&hellip; 00:08</small><div><i class="r"></i><i></i><i></i></div></div></div><div class="hm-feat-body"><span class="badge soon">Coming soon</span><h3>Floating phone</h3><p>A small phone that stays on top while you work in other tabs. Not available to order yet.</p><a class="text-link" href="/product/floating-phone/">Read more {{ icon('arrow') }}</a></div></article>
+ </div>
+ <div class="hm-center-cta"><a class="button" href="#calculator">Build your plan {{ icon('arrow') }}</a><a class="tour-link" href="/product/tour/">{{ icon('play') }} Watch product tour</a></div>
+</div></section>
+
+{# 6. Country plans coverage #}
+<section class="section dark-section hm-coverage"><div class="container">
+ <div class="section-heading split-heading"><div><span class="eyebrow light">COUNTRY PLANS</span><h2>Where your plan can call.</h2></div><p>Each plan includes unlimited calling to its countries, a local number and every included feature. Prices are per user per month with taxes included.</p></div>
+ <div class="hm-tiles">
+ {% for slug,cover in [('usa-canada','Unlimited calls to US and Canadian numbers'),('uk','Unlimited calls to UK landlines and mobiles'),('australia','Unlimited calls to Australian numbers'),('japan','Unlimited calls to Japanese numbers'),('global','Calling to many international destinations, confirmed before payment'),('uk-to-europe','A UK number calling up to 6 European countries you pick'),('europe','Local numbers in European countries, quoted for you'),('custom','Your own mix of countries and team size')] %}{% set p = plans[slug] %}
+  <a class="hm-tile" href="/numbers/{{ slug }}/"><span class="hm-tile-code {{ p.tone }}">{{ p.short }}</span><h3>{{ p.name }}</h3><p>{{ cover }}</p><span class="hm-tile-price">{% if p.price %}{% if slug in ('usa-canada','uk-to-europe') %}from {% endif %}${{ p.from_price|usd }}<small>/user/mo</small>{% else %}Custom quote{% endif %}</span>{{ icon('arrow') }}</a>
+ {% endfor %}
+ </div>
+ <p class="caption light-caption">All prices in USD and include taxes. Number types and destination coverage are confirmed before payment. <a href="/legal/fair-usage/">How unlimited calling works</a>.</p>
+</div></section>
+
+{# 7. Industries #}
+<section class="section"><div class="container">
+ <div class="section-heading centered"><span class="eyebrow">WHO USES IT</span><h2>Built for teams that live on the phone.</h2><p>From property agents to clinics and courier companies, the workflow is the same: call, note, follow up.</p></div>
+ <div class="hm-industries">
+ {% for url,label in solution_links[6:22] %}<a href="{{ url }}">{{ icon(['home','heart','bed','cup','cap','cart','shield','plane','truck','car','briefcase','calendar','dumbbell','helmet','megaphone','wrench'][loop.index0]) }}<span>{{ label }}</span></a>{% endfor %}
+ </div>
+ <div class="hm-center-cta"><a class="tour-link" href="/solutions/">See all solutions {{ icon('arrow') }}</a></div>
+</div></section>
+
+{# 8. Live pricing calculator #}
+<section class="section soft-section" id="calculator"><div class="container hm-calc-layout">
+ <div class="hm-calc-copy"><span class="eyebrow">PRICING CALCULATOR</span><h2>See your price<br>before you talk to anyone.</h2><p class="lead">Pick a plan, set your users and tick the add-ons you want. The total updates as you go.</p>
+  <ul class="check-list"><li>{{ icon('check') }} Taxes included in every price</li><li>{{ icon('check') }} $0 setup, no hardware</li><li>{{ icon('check') }} Add or remove add-ons later</li><li>{{ icon('check') }} Pay by bank transfer, USDT or card</li></ul>
+  <a class="text-link" href="/pricing/">Compare all plans {{ icon('arrow') }}</a></div>
+ {{ calculator(plans, addons, pricing) }}
+</div></section>
+
+{# 9. Compliance #}
+<section class="section" id="compliance"><div class="container">
+ <div class="section-heading split-heading"><div><span class="eyebrow">TRUST &amp; COMPLIANCE</span><h2>Calling done properly.</h2></div><p>Overseas calling and texting come with rules. We check accounts before activation and give your team tools to stay on the right side of them.</p></div>
+ <div class="hm-trust">
+  <article>{{ icon('shield') }}<h3>Account review</h3><p>Every account is checked by a person before activation. We confirm who you are and what you will use the number for.</p></article>
+  <article>{{ icon('mic') }}<h3>Recording consent</h3><p>Recording is opt-in. Tell callers when a call is recorded, and limit who can listen. <a href="/legal/call-recording/">Recording guide</a></p></article>
+  <article>{{ icon('ban') }}<h3>Do Not Call tools</h3><p>Mark a lead Do Not Call in CRM and Power Dialer will skip it. Consent is recorded on every lead.</p></article>
+  <article>{{ icon('message') }}<h3>A2P 10DLC texting</h3><p>US business texting needs carrier registration. We submit it for you and switch texting on once it is approved.</p></article>
+ </div>
+ <div class="hm-flow"><h3>What happens to your request</h3>
+  <ol>
+   <li><span>1</span><strong>Received</strong><small>Saved with a reference number</small></li>
+   <li><span>2</span><strong>Under review</strong><small>We confirm number and details</small></li>
+   <li><span>3</span><strong>Awaiting payment</strong><small>Payment details on WhatsApp</small></li>
+   <li><span>4</span><strong>Setting up</strong><small>Number and users configured</small></li>
+   <li><span>5</span><strong>Live</strong><small>Login sent, start calling</small></li>
+  </ol>
+  <p class="caption">We update you on WhatsApp at each stage.</p>
+ </div>
+</div></section>
+
+{# 10. Mission #}
+<section class="section dark-section hm-mission"><div class="container">
+ <div class="section-heading"><span class="eyebrow light">WHY WE BUILT DIALNYTICS</span><h2>Good teams shouldn't lose deals<br>to a bad phone setup.</h2></div>
+ <div class="hm-mission-grid">
+  <div><span>01</span><h3>Talent is everywhere</h3><p>Some of the best sales and support people work far from their customers. They deserve a phone line that sounds local and just works.</p></div>
+  <div><span>02</span><h3>Prices should be obvious</h3><p>One price per user, taxes included, and a short list of add-ons with their price next to them. No hidden fees, no surprise bills.</p></div>
+  <div><span>03</span><h3>People, not tickets</h3><p>You talk to a real person on WhatsApp from the first question to the first call, and afterwards too.</p></div>
+ </div>
+</div></section>
+
+{# 11. Blog teasers #}
+<section class="section"><div class="container">
+ <div class="section-heading split-heading"><div><span class="eyebrow">GUIDES</span><h2>Practical guides for<br>calling abroad.</h2></div><a class="text-link" href="/blog/">All guides {{ icon('arrow') }}</a></div>
+ <div class="hm-blog">
+ {% for slug,title,lead,tag,read,_ in blog_posts %}<a class="hm-post" href="/blog/{{ slug }}/"><span class="hm-post-art a{{ loop.index }}" aria-hidden="true">{{ icon(['clock','globe','shield'][loop.index0]) }}</span><span class="hm-post-meta">{{ tag }} &middot; {{ read }}</span><h3>{{ title }}</h3><p>{{ lead }}</p><span class="text-link">Read guide {{ icon('arrow') }}</span></a>{% endfor %}
+ </div>
+</div></section>
+
+{# 12. FAQ #}
+<section class="section soft-section"><div class="container faq-grid"><div><span class="eyebrow">GOOD QUESTIONS</span><h2>Before you<br>make the call.</h2><p>Still unsure? Message us on WhatsApp and a person will reply.</p><a href="https://wa.me/{{ business.whatsapp }}" class="button secondary" target="_blank" rel="noopener">{{ icon('whatsapp') }} Ask on WhatsApp</a><p></p><a href="/faq/" class="text-link">All questions {{ icon('arrow') }}</a></div>{{ faq_block(faq[:8]) }}</div></section>
+
+{# 13. Final CTA #}
+<section class="section"><div class="container"><div class="closing-cta"><div><span class="eyebrow light">READY WHEN YOU ARE</span><h2>Your next customer is<br>one call away.</h2><p>Pick a plan in two minutes, or see the dialer first.</p></div><div class="cta-stack"><a class="button white" href="#calculator">Get started {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><a class="tour-link light" href="/product/tour/">{{ icon('play') }} Watch product tour</a><small>From ${{ pricing.from }}/user &middot; Taxes included &middot; $0 setup</small></div></div></div></section>
 {% endblock %}
+{% block scripts %}<script type="application/json" id="pricing-data">{{ catalog|tojson }}</script><script type="module" src="/static/js/pricing.js?v=3"></script>{% endblock %}

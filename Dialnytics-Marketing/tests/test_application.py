@@ -68,7 +68,7 @@ def test_internal_links(client,app):
 
 def test_not_offered_routes(client):
     assert client.get('/refer-and-earn/').status_code==404
-    assert 'not currently' in client.get('/product/sms/').text.lower()
+    sms=client.get('/product/sms/').text;assert 'A2P 10DLC' in sms and 'Not currently available' not in sms
     for path in ['/product/ai-insights/','/product/live-captions/','/product/floating-phone/']:
         assert 'Not currently available' in client.get(path).text
 
@@ -252,3 +252,41 @@ def test_admin_pricing_editor(client,app):
         assert '$18/user' in client.get('/pricing/').text
     finally:
         apply_prices({})
+
+def test_whatsapp_ai_commands():
+    from app import chatbot as bot
+    assert bot.owner_command('AI LIST')==('list','')
+    assert bot.owner_command('ai off all')==('off','all')
+    assert bot.owner_command('AI ON +44 7700 900123')==('on','447700900123')
+    assert bot.owner_command('hello there') is None
+    assert bot.chat_command('#ai on') is True and bot.chat_command('#AI OFF') is False and bot.chat_command('ai on') is None
+
+
+def test_addons_quote_and_order(client,app):
+    from app.catalog import price_quote
+    q=price_quote('uk',3,addons=['recording','sms'])
+    assert q['plan_total']=='87.00' and q['addons_total']=='39.00' and q['monthly_total']=='126.00'
+    assert q['one_time_total']=='30.00' and q['first_payment']=='156.00' and q['taxes_included'] is True
+    with pytest.raises(ValueError): price_quote('uk',1,addons=['ai'])
+    with pytest.raises(ValueError): price_quote('uk',1,addons=['bogus'])
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=3,payment='bank',addons=['recording','sms'])
+    r=submit(client,p);assert r.status_code==200,r.text
+    assert r.json()['quote']['monthly_total']=='126.00'
+    assert 'Add-ons: Call recording, SMS texting' in r.json()['whatsapp_message']
+    p['idempotency_key']=str(uuid.uuid4());p['addons']=['ai']
+    assert submit(client,p).status_code==422
+
+def test_home_sections(client):
+    t=client.get('/').text
+    for needle in ['data-calculator','Taxes included','A2P 10DLC','What happens to your request','Why we built'.upper(),'Watch product tour','Book a demo','newsletter-form','wa-fab','/static/img/product/crm.webp','Coming soon']:
+        assert needle in t,needle
+
+def test_newsletter(client,app):
+    token=public_token(client)
+    body={'email':'News@Example.org','consent':True,'website':'','idempotency_key':str(uuid.uuid4())}
+    assert client.post('/api/newsletter',json=body).status_code==403
+    r=client.post('/api/newsletter',json=body,headers={'X-CSRF-Token':token});assert r.status_code==200,r.text
+    body['idempotency_key']=str(uuid.uuid4())
+    assert client.post('/api/newsletter',json=body,headers={'X-CSRF-Token':token}).status_code==200
+    with app.state.DB() as db:
+        rows=db.scalars(select(Submission).where(Submission.kind=='newsletter')).all();assert len(rows)==1 and rows[0].email=='news@example.org'

@@ -86,3 +86,32 @@
     observer.observe(element);
   });
 })();
+/* Footer newsletter signup */
+(() => {
+  const form = document.getElementById('newsletter-form');
+  if (!form) return;
+  const msg = form.querySelector('.ft-news-msg');
+  const button = form.querySelector('button[type="submit"]');
+  const say = (text, ok) => { msg.textContent = text; msg.hidden = false; msg.classList.toggle('ok', !!ok); };
+  const uuid = () => {
+    if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128;
+    const h = Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+    return [h.slice(0, 8), h.slice(8, 12), h.slice(12, 16), h.slice(16, 20), h.slice(20)].join('-');
+  };
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const email = form.elements.email, consent = form.elements.consent;
+    if (!email.reportValidity()) return;
+    if (!consent.checked) { say('Please tick the box to agree to receive emails.'); consent.focus(); return; }
+    button.disabled = true;
+    try {
+      const res = await fetch('/api/newsletter', { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content },
+        body: JSON.stringify({ email: email.value.trim(), consent: true, website: form.elements.website.value, idempotency_key: uuid() }) });
+      if (!res.ok) throw new Error();
+      form.reset(); say('Thanks! You are subscribed.', true);
+    } catch (_) { say('Could not subscribe right now. Please try again.'); }
+    finally { button.disabled = false; }
+  });
+})();

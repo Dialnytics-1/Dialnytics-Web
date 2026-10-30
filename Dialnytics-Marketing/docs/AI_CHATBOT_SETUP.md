@@ -70,3 +70,18 @@ Kuch manual nahi karna. App start hote hi 2 naye tables khud bante hain: `mkt_ch
 ## Abhi ki limitations
 - Live Anthropic aur Telnyx accounts par test nahi hua (keys nahi thi). Deploy ke baad website chat aur WhatsApp par ek test zaroor karein.
 - WhatsApp par photo/voice note ka matlab AI nahi samajhta (sirf "[image received]" dekhta hai); text likhne ka kehta hai.
+
+## WhatsApp se AI ON/OFF (26 Oct 2026)
+- **Apne personal WhatsApp se** (jo `ADMIN_WHATSAPP_NUMBER` mein hai) business number par bhejein:
+  - `AI LIST` → aakhri 15 WhatsApp chats, har ek ka number aur AI ON/OFF
+  - `AI ON 2` / `AI OFF 2` → list ki chat no. 2
+  - `AI ON 447700900123` → customer ke number se (aakhri 6+ digits kaafi hain)
+  - `AI ON ALL` / `AI OFF ALL` → saari WhatsApp chats
+  - `AI` → commands ki list
+  Ye messages customer ko nazar nahi aate. Bot aap ko confirm karke jawab deta hai.
+- **Customer ki chat ke andar** (WhatsApp Business app) `#ai on` ya `#ai off` likhein. Ye text customer ko bhi jata hai.
+- App se khud reply karein to us chat ka AI khud OFF ho jata hai (pehle jaisa).
+- AI ON karte waqt agar customer ka message jawab ka intezar kar raha ho to AI foran jawab deta hai.
+
+## WhatsApp connection check (Admin → Chats)
+Chats page ke upar box dikhata hai: Render keys (✓/✗), Telnyx mein lagane wala webhook URL, Telnyx se aakhri message kab aaya aur kya hua (ok / bad_signature / not_configured), aur AI ka aakhri WhatsApp send accept hua ya Telnyx ne kya error diya.

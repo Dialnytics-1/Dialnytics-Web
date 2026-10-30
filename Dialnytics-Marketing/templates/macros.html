@@ -16,6 +16,30 @@
 {% elif name == 'close' %}<path d="m6 6 12 12M6 18 12-12"/>
 {% elif name == 'calendar' %}<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 2v6M17 2v6M3 10h18M8 14h3M14 14h2M8 18h3"/>
 {% elif name == 'headset' %}<path d="M3 14v-3a9 9 0 0 1 18 0v7c0 3-4 3-7 3"/><rect x="2" y="10" width="4" height="8" rx="2"/><rect x="18" y="10" width="4" height="8" rx="2"/>
+{% elif name == 'play' %}<path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/>
+{% elif name == 'message' %}<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9h8M8 12h5"/>
+{% elif name == 'mic' %}<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+{% elif name == 'voicemail' %}<circle cx="6.5" cy="12" r="3.5"/><circle cx="17.5" cy="12" r="3.5"/><path d="M6.5 15.5h11"/>
+{% elif name == 'sparkle' %}<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/>
+{% elif name == 'layers' %}<path d="m12 3 9 5-9 5-9-5zM3 13l9 5 9-5"/>
+{% elif name == 'home' %}<path d="M3 11 12 4l9 7M5 9.5V20h14V9.5M10 20v-6h4v6"/>
+{% elif name == 'heart' %}<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M8.5 12h2l1-2 1.5 4 1-2h1.5"/>
+{% elif name == 'bed' %}<path d="M3 18V7M3 14h18v4M21 14v-2a3 3 0 0 0-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/>
+{% elif name == 'cup' %}<path d="M5 8h11v6a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5zM16 10h1.5a2.5 2.5 0 0 1 0 5H16M8 3v2M11 3v2M14 3v2"/>
+{% elif name == 'cap' %}<path d="m2 9 10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6"/>
+{% elif name == 'cart' %}<path d="M3 4h2l2.4 11h11l2-8H6.3"/><circle cx="9" cy="19" r="1.4"/><circle cx="17" cy="19" r="1.4"/>
+{% elif name == 'plane' %}<path d="M10.5 13.5 3 11l1.5-1.5 8 1L17 6a2 2 0 0 1 3 3l-4.5 4.5 1 8L15 23l-2.5-7.5L9 19v3l-1.5 1-1-3.5L3 18.5l1-1.5h3z"/>
+{% elif name == 'truck' %}<path d="M2 6h12v10H2zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>
+{% elif name == 'car' %}<path d="M4 16v-4l2-5h12l2 5v4zM4 16v2M20 16v2M4 12h16"/><circle cx="8" cy="14" r=".8"/><circle cx="16" cy="14" r=".8"/>
+{% elif name == 'briefcase' %}<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V4h6v3M3 13h18"/>
+{% elif name == 'dumbbell' %}<path d="M6 7v10M3 9.5v5M18 7v10M21 9.5v5M6 12h12"/>
+{% elif name == 'helmet' %}<path d="M3 17h18M5 17v-3a7 7 0 0 1 14 0v3M10 7V5h4v2M12 7v5"/>
+{% elif name == 'megaphone' %}<path d="M3 10v4h3l9 5V5L6 10zM18 9a4 4 0 0 1 0 6M7 14l1.5 6h2.5l-1-6"/>
+{% elif name == 'wrench' %}<path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5a4 4 0 0 1-2-2zM14.5 6.5 17 4"/>
+{% elif name == 'whatsapp' %}<path d="M4 20l1.2-3.8A8 8 0 1 1 8 19z"/><path d="M9 8.5c0 3 2.5 6 5.5 6.5l1.2-1.4-1.9-1-1 .9c-1-.4-2-1.4-2.4-2.4l.9-1-1-1.9z" fill="currentColor" stroke="none"/>
+{% elif name == 'lock' %}<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+{% elif name == 'ban' %}<circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/>
+{% elif name == 'doc' %}<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>
 {% else %}<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>{% endif %}</svg>
 {%- endmacro %}
 {% macro logo(variant='') -%}
@@ -29,6 +53,30 @@
     >
 </a>
 {%- endmacro %}
-{% macro cta() -%}<section class="section"><div class="container"><div class="closing-cta"><div><span class="eyebrow light">YOUR NEXT CONVERSATION STARTS HERE</span><h2>A better workflow.<br>A clearer monthly price.</h2><p>Choose a plan or take a 15-minute guided look around.</p></div><div class="cta-stack"><a class="button white" href="/pricing/">Find your plan {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><small>No free trial. No setup fee.</small></div></div></div></section>{%- endmacro %}
-{% macro feature_cards(features) -%}<div class="feature-grid">{% for slug,title,desc in features %}<a class="feature-card" href="/product/{{ slug }}/"><span class="feature-symbol">{{ icon(['phone','globe','users','bolt','chart','headset','record'][loop.index0]) }}</span><h3>{{ title }}</h3><p>{{ desc }}</p><span class="text-link">Explore {{ icon('arrow') }}</span></a>{% endfor %}</div>{%- endmacro %}
+{% macro cta() -%}<section class="section"><div class="container"><div class="closing-cta"><div><span class="eyebrow light">YOUR NEXT CONVERSATION STARTS HERE</span><h2>A better workflow.<br>A clearer monthly price.</h2><p>Choose a plan or take a 15-minute guided look around.</p></div><div class="cta-stack"><a class="button white" href="/pricing/">Find your plan {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><a class="tour-link light" href="/product/tour/">{{ icon('play') }} Watch product tour</a><small>No setup fee. Taxes included.</small></div></div></div></section>{%- endmacro %}
+{% macro feature_cards(features) -%}<div class="feature-grid">{% for slug,title,desc in features %}<a class="feature-card" href="/product/{{ slug }}/"><span class="feature-symbol">{{ icon(['phone','globe','users','chart','headset','voicemail'][loop.index0 % 6]) }}</span><h3>{{ title }}</h3><p>{{ desc }}</p><span class="text-link">Explore {{ icon('arrow') }}</span></a>{% endfor %}</div>{%- endmacro %}
 {% macro faq_block(faq) -%}<div class="faq-list">{% for question,answer in faq %}<details><summary>{{ question }}<span aria-hidden="true">+</span></summary><p>{{ answer }}</p></details>{% endfor %}</div>{%- endmacro %}
+
+{% macro taxes() -%}<span class="tax-tag">Taxes incl.</span>{%- endmacro %}
+{% macro calculator(plans, addons, pricing, compact=false) -%}
+<div class="calc2" data-calculator>
+ <div class="calc2-inputs">
+  <label for="calc-plan">Country plan</label>
+  <select id="calc-plan" name="plan">{% for slug,plan in plans.items() %}<option value="{{ slug }}">{{ plan.name }}{% if plan.price %} &mdash; from ${{ plan.from_price|usd }}{% else %} &mdash; quote{% endif %}</option>{% endfor %}</select>
+  <div class="calc-users"><div><label for="calc-users">Users</label><small>1 to 100</small></div><div class="stepper"><button type="button" data-minus aria-label="Remove one user">&minus;</button><input type="number" id="calc-users" min="1" max="100" value="1" inputmode="numeric" aria-label="Number of users"><button type="button" data-plus aria-label="Add one user">+</button></div></div>
+  <div data-europe-count hidden><label for="calc-countries">European destinations</label><select id="calc-countries">{% for n in range(1,7) %}<option value="{{ n }}">{{ n }} {% if n==1 %}country{% else %}countries{% endif %}</option>{% endfor %}</select></div>
+  <fieldset class="calc2-addons"><legend>Add-ons <small>per user / month</small></legend>
+  {% for a in addons %}<label class="addon-opt{% if not a.live %} soon{% endif %}"><input type="checkbox" value="{{ a.key }}" data-addon{% if not a.live %} disabled{% endif %}><span class="addon-box" aria-hidden="true">{{ icon('check') }}</span><span class="addon-text"><strong>{{ a.name }}</strong><small>{{ a.note }}</small></span><span class="addon-price">{% if a.live %}+${{ a.price }}{% else %}<em>Coming soon</em>{% endif %}</span></label>{% endfor %}
+  </fieldset>
+ </div>
+ <div class="calc2-result" aria-live="polite">
+  <span class="eyebrow light">YOUR MONTHLY TOTAL</span>
+  <strong class="calc2-total" data-total>$0.00</strong>
+  <span class="calc2-sub">USD per month &middot; taxes included &middot; $0 setup</span>
+  <dl class="calc2-lines"><div><dt>Plan</dt><dd data-plan-line>-</dd></div><div><dt>Add-ons</dt><dd data-addon-line>$0.00</dd></div><div data-onetime-row hidden><dt>One-time SMS registration</dt><dd data-onetime>-</dd></div></dl>
+  <p class="calc-rate" data-rate></p>
+  <a class="button full" data-calculator-link href="/get-started/usa-canada/?users=1">Get started with this plan {{ icon('arrow') }}</a>
+  <a class="calc2-demo" href="/book-demo/">Not sure yet? Book a 15-min demo</a>
+ </div>
+</div>
+{%- endmacro %}

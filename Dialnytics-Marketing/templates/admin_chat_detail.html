@@ -9,7 +9,7 @@
   <section class="card chat-thread-card">
     <div class="chat-thread" data-chat-thread data-chat-id="{{ conv.id }}" data-last-id="{{ last_id }}" aria-live="polite">
       {% for m in messages %}
-      <div class="bubble-row {{ m.role }}" data-id="{{ m.id }}"><div class="bubble"><span class="bubble-who">{{ {'user': conv.display_name or 'Customer', 'assistant': 'AI assistant', 'admin': 'You'}.get(m.role, m.role) }}</span><p>{{ m.body }}</p><small>{{ m.created_at|stamp }}{% if m.status=='failed' %} &middot; <b class="failed">not delivered</b>{% elif m.status %} &middot; {{ m.status }}{% endif %}</small></div></div>
+      <div class="bubble-row {{ m.role }}" data-id="{{ m.id }}"><div class="bubble"><span class="bubble-who">{{ {'user': conv.display_name or 'Customer', 'assistant': 'AI assistant', 'admin': 'You', 'system': 'Note'}.get(m.role, m.role) }}</span><p>{{ m.body }}</p><small>{{ m.created_at|stamp }}{% if m.status=='failed' %} &middot; <b class="failed">not delivered</b>{% elif m.status %} &middot; {{ m.status }}{% endif %}</small></div></div>
       {% else %}<p class="muted chat-empty">No messages yet.</p>{% endfor %}
     </div>
     <form class="chat-reply" action="/admin/chats/{{ conv.id }}/reply" method="post">

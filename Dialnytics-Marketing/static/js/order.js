@@ -1,4 +1,4 @@
-import { getQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js?v=2';
+import { getQuote, addonQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js?v=3';
 const catalog = JSON.parse(document.getElementById('pricing-data').textContent);
 const root = document.getElementById('order-app');
 const form = document.getElementById('order-form');
@@ -16,6 +16,10 @@ const key = newKey();
 const params = new URLSearchParams(window.location.search);
 const requestedUsers = Number(params.get('users') || 1);
 users.value = Number.isInteger(requestedUsers) ? String(requestedUsers) : '1';
+const addonBoxes = Array.from(form.querySelectorAll('[name="addon"]'));
+const requestedAddons = (params.get('addons') || '').split(',');
+addonBoxes.forEach(box => { if (!box.disabled && requestedAddons.includes(box.value)) box.checked = true; });
+const selectedAddons = () => addonBoxes.filter(box => box.checked && !box.disabled).map(box => box.value);
 const selectedCountries = () => Array.from(form.querySelectorAll('[name="europe_country"]:checked')).map(input=>input.value);
 function showError(text) { error.textContent=text; error.hidden=!text; }
 function update() {
@@ -26,13 +30,18 @@ function update() {
   document.getElementById('summary-plan').textContent=catalog.plans[plan.value].name;
   document.getElementById('summary-users').textContent=String(n);
   document.getElementById('summary-rate').textContent=quote.rate===null ? 'Quote required' : money(quote.rate);
-  document.getElementById('summary-total').textContent=quote.total===null ? 'Custom quote' : money(quote.total);
+  const extras = addonQuote(catalog, selectedAddons(), n);
+  document.getElementById('summary-addons').textContent=money(extras.monthly);
+  document.getElementById('summary-onetime-row').hidden=!extras.oneTime;
+  document.getElementById('summary-onetime').textContent=money(extras.oneTime);
+  document.getElementById('summary-addon-names').textContent=extras.lines.length ? 'Add-ons: '+extras.lines.map(l=>l.name).join(', ') : '';
+  document.getElementById('summary-total').textContent=quote.total===null ? 'Custom quote' : money(quote.total+extras.monthly);
   document.getElementById('summary-countries').textContent=plan.value==='uk-to-europe' ? (selectedCountries().length ? selectedCountries().join(', ') : 'Select at least one European destination.') : '';
   document.getElementById('plan-explainer').textContent = plan.value === 'usa-canada'
     ? '1 user: '+money(Number(catalog.usa.one))+'/month. 2 users: '+money(Number(catalog.usa.two))+' total/month. 3+ users: '+money(Number(catalog.usa.per))+' per user/month.'
     : plan.value === 'uk-to-europe' ? 'The monthly rate is for your chosen destination package per user. Select 1-6 countries. For more destinations, choose Custom Plan.'
     : quote.total===null ? 'No invented price: tell us your requirements and our team will confirm a quote before you pay.'
-    : money(quote.rate)+' per user/month. All seven current plan features are included.';
+    : money(quote.rate)+' per user/month, taxes included. Calling, your number, CRM and voicemail are included.';
   return quote;
 }
 function validateCurrent() {
@@ -45,7 +54,7 @@ function validateCurrent() {
 }
 function review() {
   const list = document.getElementById('review-details'); list.replaceChildren();
-  for (const [label,value] of [['Name',form.elements.name.value],['Email',form.elements.email.value],['WhatsApp',form.elements.phone.value],['Business',form.elements.company.value || '-']]) {
+  for (const [label,value] of [['Name',form.elements.name.value],['Email',form.elements.email.value],['WhatsApp',form.elements.phone.value],['Business',form.elements.company.value || '-'],['Add-ons',addonQuote(catalog,selectedAddons(),1).lines.map(l=>l.name).join(', ') || 'None']]) {
     const row=document.createElement('div'), left=document.createElement('span'), right=document.createElement('strong');
     left.textContent=label;right.textContent=value;row.append(left,right);list.append(row);
   }
@@ -64,6 +73,7 @@ plus.addEventListener('click',()=>{users.value=quantity(users)+1;update();});
 users.addEventListener('change',update);
 users.addEventListener('input',()=>{if(users.value!=='')update();});
 plan.addEventListener('change',()=>{showError('');update();});
+addonBoxes.forEach(box=>box.addEventListener('change',update));
 form.querySelectorAll('[name="europe_country"]').forEach(input=>input.addEventListener('change',()=>{
   if(selectedCountries().length>6){input.checked=false;showError('Select up to 6 destinations. Use Custom Plan for a larger destination mix.');}else showError('');
   update();
@@ -76,7 +86,7 @@ form.addEventListener('submit',async event=>{
   if(step!==3){if(validateCurrent())navigate(Math.min(3,step+1));return;}
   if(!document.getElementById('order-consent').reportValidity())return;
   const fields=new FormData(form);
-  const payload={kind:'order',name:String(fields.get('name')).trim(),email:String(fields.get('email')).trim(),phone:String(fields.get('phone')).trim(),company:String(fields.get('company')||''),message:String(fields.get('message')||''),plan:plan.value,users:quantity(users),countries:plan.value==='uk-to-europe'?selectedCountries():[],payment:String(fields.get('payment')),number_preference:String(fields.get('number_preference')||''),consent:true,website:String(fields.get('website')||''),idempotency_key:key};
+  const payload={kind:'order',name:String(fields.get('name')).trim(),email:String(fields.get('email')).trim(),phone:String(fields.get('phone')).trim(),company:String(fields.get('company')||''),message:String(fields.get('message')||''),plan:plan.value,users:quantity(users),countries:plan.value==='uk-to-europe'?selectedCountries():[],addons:selectedAddons(),payment:String(fields.get('payment')),number_preference:String(fields.get('number_preference')||''),consent:true,website:String(fields.get('website')||''),idempotency_key:key};
   busy=true;submit.disabled=true;back.disabled=true;submit.textContent='Saving your enquiry...';showError('');
   try{
     const data=await submitRequest(payload);saved=true;message=data.whatsapp_message;

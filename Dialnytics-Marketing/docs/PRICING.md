@@ -48,3 +48,17 @@ request. Prices sent by the browser are not accepted.
 - Reference structure/rates reviewed: https://dialsyx.com/pricing/ and
   https://dialsyx.com/numbers/uk-to-europe/ on 22 October 2026.
 - This application does not scrape or automatically change prices after deployment.
+
+## Add-ons (owner-approved 30 October 2026)
+
+Optional, per user per month, added on top of the plan price. Prices are editable in Admin → Pricing (group "Add-ons").
+
+| Add-on | Default | Orderable |
+|---|---|---|
+| Call recording | $5 | Yes |
+| Campaigns & Power Dialer | $8 | Yes |
+| SMS texting (300 texts/user/month) | $8 + $30 one-time registration per account | Yes |
+| AI insights | $5 | No, shown as "Coming soon" |
+
+Included in every plan: unlimited calling in plan destinations, dedicated caller ID, CRM, call logs, incoming/outgoing calling and voicemail.
+All published prices include taxes. The server recalculates every quote (`price_quote(..., addons=[...])`) and rejects add-ons that are not orderable.

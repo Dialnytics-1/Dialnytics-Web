@@ -2,13 +2,13 @@
 import json, logging, secrets, threading, time, uuid
 from urllib.parse import urlencode
 from collections import defaultdict
-from datetime import timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import Request, HTTPException, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, func, or_, delete
 from sqlalchemy.exc import IntegrityError
-from .database import ChatConversation, ChatMessage, Submission, MailJob
+from .database import ChatConversation, ChatMessage, Submission, MailJob, Setting
 from .security import now, sha, form_token, valid_form_token
 from . import chatbot as bot
 
@@ -56,6 +56,64 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         if role == 'user':
             conv.unread = (conv.unread or 0) + 1; conv.last_inbound_at = now()
         return msg
+
+    def record_webhook(result, event='', kind='', detail=''):
+        """Remember the latest WhatsApp webhook outcome so Admin > Chats can show what is happening."""
+        try:
+            with DB.begin() as db:
+                row = db.get(Setting, 'wa_webhook')
+                info = dict(row.value or {}) if row else {}
+                info.update({'at': now().isoformat(), 'result': result, 'event': event[:60], 'kind': kind[:20], 'detail': detail[:200]})
+                if result == 'ok': info['ok_count'] = int(info.get('ok_count', 0)) + 1; info['last_ok'] = info['at']
+                else: info['fail_count'] = int(info.get('fail_count', 0)) + 1
+                if row: row.value = info; row.updated_at = now()
+                else: db.add(Setting(key='wa_webhook', value=info, updated_at=now()))
+        except Exception:
+            log.exception('Could not record WhatsApp webhook diagnostics')
+
+    def owner_reply(text):
+        to = bot.normalize_phone(settings.admin_whatsapp)
+        if not to: return
+        def _send():
+            try: bot.send_whatsapp_text(settings, to, text)
+            except Exception as exc: log.warning('Owner command reply failed: %s', exc)
+        threading.Thread(target=_send, daemon=True).start()
+
+    def run_owner_command(action, target):
+        """AI LIST / AI ON n / AI OFF n / AI ON ALL ... sent from ADMIN_WHATSAPP_NUMBER. Returns (reply, conv ids to answer)."""
+        if action == 'help': return bot.OWNER_HELP, []
+        own = bot.normalize_phone(settings.admin_whatsapp)
+        with DB.begin() as db:
+            recent = db.scalars(select(ChatConversation).where(ChatConversation.channel == 'whatsapp', ChatConversation.phone != own)
+                                .order_by(ChatConversation.last_message_at.desc()).limit(15)).all()
+            if action == 'list':
+                if not recent: return 'No WhatsApp chats yet.', []
+                lines = ['Latest WhatsApp chats:']
+                for i, c in enumerate(recent, 1):
+                    lines.append(f"{i}. {c.display_name or c.phone} {c.phone} - AI {'ON' if c.ai_enabled else 'OFF'}" + (' - needs you' if c.needs_human else ''))
+                lines.append('Reply AI ON 2 or AI OFF 2 (number from this list).')
+                return '\n'.join(lines), []
+            on = action == 'on'
+            if not target: return 'Which chat? Send AI LIST, then e.g. AI ' + action.upper() + ' 2', []
+            if target == 'all':
+                chosen = db.scalars(select(ChatConversation).where(ChatConversation.channel == 'whatsapp', ChatConversation.phone != own)).all()
+            elif len(target) <= 2:
+                n = int(target)
+                chosen = [recent[n - 1]] if 1 <= n <= len(recent) else []
+                if not chosen: return f'There is no chat number {n}. Send AI LIST first.', []
+            else:
+                if len(target) < 6: return 'Send at least the last 6 digits of the customer number.', []
+                chosen = [c for c in db.scalars(select(ChatConversation).where(ChatConversation.channel == 'whatsapp')).all() if c.phone.lstrip('+').endswith(target) and c.phone != own]
+                if len(chosen) != 1: return ('No chat found for ' + target) if not chosen else 'More than one chat matches; send more digits.', []
+            wake = []
+            for c in chosen:
+                c.ai_enabled = on
+                if on: c.needs_human = False
+                add_message(db, c, 'system', 'AI switched ' + ('ON' if on else 'OFF') + ' from the owner\'s WhatsApp')
+                last = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == c.id, ChatMessage.role != 'system').order_by(ChatMessage.id.desc()).limit(1))
+                if on and last is not None and last.role == 'user': wake.append(c.id)
+            who = 'all WhatsApp chats' if target == 'all' else (chosen[0].display_name or chosen[0].phone)
+            return f"AI is now {'ON' if on else 'OFF'} for {who}." + (' It is answering the waiting message now.' if wake else ''), wake
 
     def lead_link(row_id): return settings.base_url + '/admin/requests/' + row_id
     def chat_link(conv_id): return settings.base_url + '/admin/chats/' + conv_id
@@ -120,7 +178,7 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
         alert_async(lines, info['reference'] + ' | ' + info['summary'] + ' | ' + info['link'])
 
     def alert_human(conv_id, who, reason):
-        alert_async(['🙋 Customer wants the team', 'From: ' + who, 'Reason: ' + reason, chat_link(conv_id)],
+        alert_async(['🙋 Customer wants the team', 'From: ' + who, 'Reason: ' + reason, chat_link(conv_id), 'AI is OFF for this chat. Reply AI LIST, then AI ON <no.> to switch it back on.'],
                     'Team needed | ' + who + ' | ' + reason + ' | ' + chat_link(conv_id))
 
     # ------------------------------------------------------------ AI turn
@@ -133,7 +191,7 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
                 if not conv or not conv.ai_enabled: return []
                 latest = db.scalar(select(ChatMessage.id).where(ChatMessage.conversation_id == conv_id, ChatMessage.role == 'user').order_by(ChatMessage.id.desc()).limit(1))
                 if not latest or (trigger_id and latest != trigger_id): return []
-                last_any = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.id.desc()).limit(1))
+                last_any = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conv_id, ChatMessage.role != 'system').order_by(ChatMessage.id.desc()).limit(1))
                 if last_any and last_any.role != 'user': return []   # already answered
                 rows = [(r.role, r.body) for r in db.scalars(select(ChatMessage).where(ChatMessage.conversation_id == conv_id).order_by(ChatMessage.id.desc()).limit(40)).all()][::-1]
                 language, lead, channel, ai_count = conv.language, dict(conv.lead or {}), conv.channel, conv.ai_replies or 0
@@ -268,13 +326,40 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
     @app.post('/webhooks/telnyx/whatsapp')
     async def whatsapp_webhook(request: Request, background: BackgroundTasks):
         raw = await request.body()
-        if not settings.telnyx_public_key: return JSONResponse({'detail': 'WhatsApp is not configured.'}, status_code=503)
+        if not settings.telnyx_public_key:
+            record_webhook('not_configured', detail='TELNYX_PUBLIC_KEY is missing in Render')
+            return JSONResponse({'detail': 'WhatsApp is not configured.'}, status_code=503)
         if not bot.verify_telnyx(raw, request.headers.get('telnyx-signature-ed25519', ''), request.headers.get('telnyx-timestamp', ''), settings.telnyx_public_key):
+            record_webhook('bad_signature', detail='Signature did not match TELNYX_PUBLIC_KEY (or the server clock/timestamp is off)')
             return JSONResponse({'detail': 'Invalid signature.'}, status_code=401)
-        try: event = bot.parse_whatsapp_event(json.loads(raw.decode('utf-8')))
-        except (ValueError, UnicodeDecodeError): return JSONResponse({'detail': 'Invalid JSON.'}, status_code=400)
+        try:
+            data = json.loads(raw.decode('utf-8')); event = bot.parse_whatsapp_event(data)
+        except (ValueError, UnicodeDecodeError):
+            record_webhook('bad_json'); return JSONResponse({'detail': 'Invalid JSON.'}, status_code=400)
         own = bot.normalize_phone(settings.wa_from)
         kind = event['kind']
+        evtype = str(((data or {}).get('data') or {}).get('event_type') or '')
+        record_webhook('ok', evtype, kind, '' if kind != 'ignore' else 'Event received but not a WhatsApp chat message')
+        owner = bot.normalize_phone(settings.admin_whatsapp) if settings.admin_whatsapp else ''
+        if kind == 'inbound' and owner and event.get('phone') == owner:
+            cmd = bot.owner_command(event.get('text', ''))
+            if cmd:
+                reply, wake = run_owner_command(*cmd)
+                owner_reply(reply)
+                for cid in wake: background.add_task(process_ai, cid, None, 0.0)
+                return {'ok': True, 'command': cmd[0]}
+        if kind == 'echo' and event.get('phone') and event['phone'] != own and bot.chat_command(event.get('text', '')) is not None:
+            on = bot.chat_command(event['text']); wake = None
+            with DB.begin() as db:
+                conv = db.scalar(select(ChatConversation).where(ChatConversation.contact_key == 'wa:' + event['phone']))
+                if conv:
+                    conv.ai_enabled = on
+                    if on: conv.needs_human = False
+                    add_message(db, conv, 'system', 'AI switched ' + ('ON' if on else 'OFF') + ' from the WhatsApp app (' + event['text'].strip()[:20] + ')')
+                    last = db.scalar(select(ChatMessage).where(ChatMessage.conversation_id == conv.id, ChatMessage.role != 'system').order_by(ChatMessage.id.desc()).limit(1))
+                    if on and last is not None and last.role == 'user': wake = conv.id
+            if wake: background.add_task(process_ai, wake, None, 0.0)
+            return {'ok': True, 'command': 'ai_on' if on else 'ai_off'}
         if kind in ('inbound', 'echo') and event.get('phone') and event['phone'] != own:
             if kind == 'echo' and event.get('origin') not in (None, '', 'whatsapp_business_app'):
                 return {'ok': True}
@@ -318,6 +403,22 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
     def window_open(conv):
         return bool(conv.last_inbound_at and aware(conv.last_inbound_at) > now() - WINDOW)
 
+    def whatsapp_check():
+        with DB() as db: row = db.get(Setting, 'wa_webhook')
+        hook = dict(row.value or {}) if row else {}
+        send = dict(bot.LAST_SEND)
+        if send.get('at'): send['when'] = datetime.fromtimestamp(send['at'], timezone.utc)
+        if hook.get('at'):
+            try: hook['when'] = datetime.fromisoformat(hook['at'])
+            except ValueError: pass
+        return {'items': [('ANTHROPIC_API_KEY (AI replies)', bool(settings.anthropic_key)),
+                          ('TELNYX_API_KEY', bool(settings.telnyx_key)),
+                          ('TELNYX_PUBLIC_KEY (webhook signature)', bool(settings.telnyx_public_key)),
+                          ('WHATSAPP_FROM_NUMBER = ' + (settings.wa_from or '-'), bool(bot.normalize_phone(settings.wa_from))),
+                          ('TELNYX_MESSAGING_PROFILE_ID', bool(settings.wa_profile_id)),
+                          ('ADMIN_WHATSAPP_NUMBER (alerts + AI commands)', bool(bot.normalize_phone(settings.admin_whatsapp)) if settings.admin_whatsapp else False)],
+                'webhook_url': settings.base_url + '/webhooks/telnyx/whatsapp', 'hook': hook, 'send': send}
+
     @app.get('/admin/chats', response_class=HTMLResponse)
     def chats(request: Request, channel: str = '', view: str = '', q: str = ''):
         sess = admin_session(request)
@@ -345,7 +446,8 @@ def register_chat(app, settings, DB, render, require_public_csrf, rate_limit, ad
                       'channel': channel, 'view': view, 'q': q, 'mail_ready': settings.mail_ready,
                       'ai_ready': settings.ai_ready, 'whatsapp_ready': settings.whatsapp_ready,
                       'alerts_ready': bool(settings.whatsapp_ready and settings.admin_whatsapp),
-                      'profile_ready': bool(settings.telnyx_key and settings.wa_profile_id)})
+                      'profile_ready': bool(settings.telnyx_key and settings.wa_profile_id),
+                      'wa_check': whatsapp_check()})
 
     @app.get('/admin/chats/badge.json')
     def chats_badge(request: Request):

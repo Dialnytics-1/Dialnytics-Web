@@ -14,15 +14,15 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from .settings import Settings, ROOT
 from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket, Setting
 from .security import now, sha, verify_password, form_token, valid_form_token, csv_safe
-from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd
-from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, refresh_price_text
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog, addon_view, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd
+from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, BLOG_POSTS, refresh_price_text
 from .mail import deliver_one
 from .chat_routes import register_chat
 
 log=logging.getLogger('dialnytics.marketing')
 STATUSES=['new','contacted','awaiting_payment','paid','demo_confirmed','closed','spam']
 KINDS=['order','contact','demo','quote','support']
-ADMIN_KINDS=KINDS+['chat']  # 'chat' leads come from the AI assistant (website + WhatsApp)
+ADMIN_KINDS=KINDS+['chat','newsletter']  # 'chat' leads come from the AI assistant; 'newsletter' from the footer signup
 
 class RequestData(BaseModel):
     model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
@@ -36,6 +36,7 @@ class RequestData(BaseModel):
     plan: str=Field(default='',max_length=40)
     users: int=Field(default=1,ge=1,le=100,strict=True)
     countries: list[str]=Field(default_factory=list,max_length=6)
+    addons: list[str]=Field(default_factory=list,max_length=4)
     payment: str=Field(default='',max_length=30)
     number_preference: str=Field(default='',max_length=200)
     preferred_date: str=Field(default='',max_length=40)
@@ -54,6 +55,13 @@ class RequestData(BaseModel):
     def no_controls(cls,v):
         if any(ord(c)<32 for c in v): raise ValueError('Use plain text without control characters.')
         return v
+
+class NewsletterData(BaseModel):
+    model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
+    email: EmailStr
+    consent: bool
+    website: str=Field(default='',max_length=200)  # honeypot
+    idempotency_key: uuid.UUID
 
 def aware(d): return d.replace(tzinfo=timezone.utc) if d and d.tzinfo is None else d
 
@@ -195,7 +203,7 @@ def create_app(settings=None):
         if not valid_form_token(settings.secret,csrf,'public'): csrf=form_token(settings.secret,'public')
         ctx={'business':BUSINESS,'plans':PLANS,'features':FEATURES,'faq':FAQ,
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
-             'catalog':client_catalog(),'pricing':price_view(),'csrf':csrf,'year':now().year,
+             'catalog':client_catalog(),'pricing':price_view(),'addons':addon_view(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
              'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'page_title':'Business calling, without the extra layers.',
              'description':'Unlimited business calling, dedicated caller ID, CRM, Power Dialer and recording. Clear prices. A human setup process.',
@@ -251,9 +259,9 @@ def create_app(settings=None):
     @app.get('/favicon.ico')
     def favicon(): return RedirectResponse('/static/img/favicon.svg',status_code=302)
     @app.get('/',response_class=HTMLResponse)
-    def home(request:Request): return render(request,'home.html',{'full_title':'Dialnytics – Business Calling, CRM & Power Dialer'})
+    def home(request:Request): return render(request,'home.html',{'blog_posts':BLOG_POSTS,'page_title':'Business calling for teams that sell abroad','description':'Local US, UK, Australian and Japanese business numbers in your browser. Unlimited calling in your plan countries, CRM and voicemail included. From one clear per-user price, taxes included.'})
     @app.get('/pricing/',response_class=HTMLResponse)
-    def pricing(request:Request): return render(request,'pricing.html',{'page_title':'One plan price. Everything included.'})
+    def pricing(request:Request): return render(request,'pricing.html',{'page_title':'One plan price. Add only what you need.'})
     @app.get('/get-started/',response_class=HTMLResponse)
     def get_started(request:Request): return RedirectResponse('/pricing/#plans',status_code=303)
     @app.get('/get-started/{plan}/',response_class=HTMLResponse)
@@ -295,7 +303,7 @@ def create_app(settings=None):
     @app.post('/api/quote')
     def calculate(request:Request,data:dict):
         require_public_csrf(request)
-        try: return price_quote(data.get('plan'),data.get('users'),data.get('countries',[]))
+        try: return price_quote(data.get('plan'),data.get('users'),data.get('countries',[]),data.get('addons',[]))
         except (ValueError,TypeError): raise HTTPException(422,'Choose a valid plan, user count and destination selection.')
 
     @app.post('/api/requests')
@@ -311,7 +319,7 @@ def create_app(settings=None):
             raise HTTPException(422,'Please include at least 10 characters in your message.')
         details={}
         if data.kind=='order':
-            try: details=price_quote(data.plan,data.users,data.countries)
+            try: details=price_quote(data.plan,data.users,data.countries,data.addons)
             except ValueError as exc: raise HTTPException(422,str(exc))
             if data.payment not in ('bank','usdt','stripe'): raise HTTPException(422,'Choose a payment preference.')
             details.update(payment=data.payment,number_preference=data.number_preference)
@@ -329,6 +337,9 @@ def create_app(settings=None):
             if row.kind=='order':
                 text_lines += [f'Plan: {row.details["plan_name"]}',f'Users: {row.details["users"]}',f'Monthly total: '+('$'+row.details['monthly_total']+' USD' if row.details.get('monthly_total') else 'Custom quote required'),f'Payment preference: {row.details["payment"]}']
                 if row.details.get('countries'): text_lines.append('Destinations: '+', '.join(row.details['countries']))
+                if row.details.get('addons'): text_lines.append('Add-ons: '+', '.join(a['name'] for a in row.details['addons']))
+                if row.details.get('one_time_total') not in (None,'0.00'): text_lines.append('One-time SMS registration: $'+row.details['one_time_total']+' USD')
+                if row.details.get('taxes_included'): text_lines.append('Prices include taxes.')
             if row.kind=='demo': text_lines.append('Please confirm the timing of my 15-minute demo.')
             text_lines.append('Please confirm the next steps.');msg='\n'.join(text_lines)
             return {'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
@@ -470,6 +481,26 @@ def create_app(settings=None):
         if not sess: return RedirectResponse('/admin/login',status_code=303)
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
+
+    @app.post('/api/newsletter')
+    def newsletter(request:Request,data:NewsletterData):
+        require_public_csrf(request)
+        if data.website: raise HTTPException(400,'Unable to subscribe.')
+        if not data.consent: raise HTTPException(422,'Please agree to receive occasional emails.')
+        email=str(data.email).lower(); key=str(data.idempotency_key)
+        with DB() as db:
+            if db.scalar(select(Submission).where(Submission.kind=='newsletter',Submission.email==email)): return {'subscribed':True}
+        rate_limit(request,'newsletter',5,3600)
+        row=Submission(id=str(uuid.uuid4()),reference='DNL-'+now().strftime('%y%m%d')+'-'+secrets.token_hex(6).upper(),
+                       idempotency_key=key,payload_hash=sha(email),kind='newsletter',name='Newsletter subscriber',email=email,
+                       details={'source':'website footer'},status='new')
+        try:
+            with DB.begin() as db: db.add(row)
+        except IntegrityError: return {'subscribed':True}
+        except SQLAlchemyError:
+            log.exception('Newsletter signup could not be saved')
+            raise HTTPException(503,'Could not subscribe right now. Please try again later.')
+        return {'subscribed':True}
 
     def pricing_groups(values):
         groups=[]
