@@ -1,0 +1,24 @@
+{% extends 'admin_base.html' %}{% block content %}
+<div class="admin-heading"><div><span class="eyebrow">WEBSITE CONTENT</span><h1>Plans &amp; add-ons.</h1><p>Rename plans, change their descriptions, hide a plan, or switch an add-on on or off. Prices are changed on the <a href="/admin/pricing">Pricing</a> page. Changes appear on the website within about 30 seconds. Orders already placed are not affected.</p></div><a href="/admin" class="button secondary">Back to inbox</a></div>
+{% if saved=='1' %}<div class="price-alert ok" role="status">Saved and published.</div>{% elif saved=='none' %}<div class="price-alert bad" role="alert">At least one plan must stay on. Nothing was saved.</div>{% endif %}
+<form method="post" action="/admin/plans" class="price-form" novalidate>
+<input type="hidden" name="csrf" value="{{ admin.csrf }}">
+<fieldset class="card price-group"><legend>Country plans</legend>
+<div class="price-grid">{% for p in form.plans %}
+<div class="price-field"><span>{{ p.slug }}</span>
+<input name="plan_name_{{ p.slug }}" value="{{ p.name }}" maxlength="60" aria-label="Name of {{ p.slug }}">
+<textarea name="plan_desc_{{ p.slug }}" rows="3" maxlength="240" aria-label="Description of {{ p.slug }}">{{ p.description }}</textarea>
+<label><input type="checkbox" name="plan_on_{{ p.slug }}" value="1" {% if p.enabled %}checked{% endif %}> Shown on the website</label></div>
+{% endfor %}</div></fieldset>
+<fieldset class="card price-group"><legend>Add-ons</legend>
+<div class="price-grid">{% for a in form.addons %}
+<div class="price-field"><span>{{ a.key }}</span>
+<input name="addon_name_{{ a.key }}" value="{{ a.name }}" maxlength="60" aria-label="Name of {{ a.key }}">
+<textarea name="addon_note_{{ a.key }}" rows="3" maxlength="240" aria-label="Description of {{ a.key }}">{{ a.note }}</textarea>
+<label><input type="checkbox" name="addon_on_{{ a.key }}" value="1" {% if a.live %}checked{% endif %}> Can be ordered (off = &ldquo;Coming soon&rdquo;)</label></div>
+{% endfor %}</div></fieldset>
+<div class="price-actions"><button class="button" type="submit" name="action" value="save">Save &amp; publish</button>
+<button class="button secondary" type="submit" name="action" value="reset" data-confirm="Reset every plan and add-on name, description and switch to the defaults?">Reset to defaults</button></div>
+</form>
+{% if row %}<p class="muted price-meta">Last changed {{ row.updated_at|stamp }} by {{ row.updated_by }}.</p>{% endif %}
+{% endblock %}

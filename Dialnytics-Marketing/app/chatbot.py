@@ -84,7 +84,9 @@ def knowledge(base_url: str) -> str:
     lines.append('OPTIONAL PAID ADD-ONS (per user per month, added on top of the plan price; NOT included by default):')
     for a in ADDONS:
         price = _usd(PRICES[a['field']])
-        if a['live']:
+        if a['live'] and a.get('one_time'):
+            lines.append(f"- {a['name']}: ${price} ONE-TIME per number (not monthly, not per user). USA & Canada plan only. {a['note']}")
+        elif a['live']:
             extra = f" plus a one-time ${_usd(PRICES['sms_setup'])} registration per account" if a['key'] == 'sms' else ''
             lines.append(f"- {a['name']}: ${price} per user/month{extra}. {a['note']}")
         else:

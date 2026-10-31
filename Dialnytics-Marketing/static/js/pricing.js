@@ -1,4 +1,4 @@
-import { getQuote, addonQuote, money, quantity } from './shared.js?v=3';
+import { getQuote, addonQuote, money, quantity } from './shared.js?v=4';
 const catalog = JSON.parse(document.getElementById('pricing-data').textContent);
 const root = document.querySelector('[data-calculator]');
 if (root) {
@@ -10,6 +10,8 @@ if (root) {
   function update() {
     const n = quantity(users);
     const quote = getQuote(catalog, plan.value, n, Number(countries.value));
+    boxes.forEach(b => { const label = b.closest('label'); const regions = (label.dataset.regions || '').split(',').filter(Boolean);
+      if (regions.length) { const ok = regions.includes(plan.value); b.disabled = !ok; if (!ok) b.checked = false; label.hidden = !ok; } });
     const extras = addonQuote(catalog, boxes.filter(b => b.checked).map(b => b.value), n);
     $('[data-minus]').disabled = n <= 1;
     $('[data-plus]').disabled = n >= 100;

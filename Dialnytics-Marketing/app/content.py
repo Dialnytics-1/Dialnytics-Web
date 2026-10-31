@@ -236,7 +236,7 @@ def _addons_text():
     p = price_view()
     return (f"Every plan already includes calling, your number, CRM, call logs and voicemail. Add-ons are optional extras, per user "
             f"per month: Call recording ${p['addon_recording']}, Campaigns & Power Dialer ${p['addon_campaigns']} and SMS texting "
-            f"${p['addon_sms']} (300 texts, plus ${p['sms_setup']} one-time A2P 10DLC registration) and AI call insights ${p['addon_ai']}.")
+            f"${p['addon_sms']} (300 texts, plus ${p['sms_setup']} one-time A2P 10DLC registration) and AI call insights ${p['addon_ai']}. USA & Canada teams can also choose a toll-free number for a one-time ${p['toll_free']} per number.")
 
 def refresh_price_text():
     """Rewrite the few content strings that quote prices (FAQ + billing policy) after prices change."""

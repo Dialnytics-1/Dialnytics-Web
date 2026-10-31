@@ -14,17 +14,44 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from .settings import Settings, ROOT
 from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket, Setting
 from .security import now, sha, verify_password, form_token, valid_form_token, csv_safe
-from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog, addon_view, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd
+from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, ADDONS, price_quote, client_catalog, addon_view, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd, apply_overrides, enabled_plans, is_toll_free, NUMBER_RE
 from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, BLOG_POSTS, refresh_price_text
 from .mail import deliver_one
 from .chat_routes import register_chat
-from .payments import checkout_params, create_checkout, verify_webhook
+from .payments import checkout_params, create_checkout, verify_webhook, expire_checkout, checkout_status
+from .dialer import Dialer, DialerError
 from .tools import TOOLS, TOOL_MAP
 
 log=logging.getLogger('dialnytics.marketing')
 STATUSES=['new','contacted','awaiting_payment','paid','demo_confirmed','closed','spam']
 KINDS=['order','contact','demo','quote','support']
 ADMIN_KINDS=KINDS+['chat','newsletter']  # 'chat' leads come from the AI assistant; 'newsletter' from the footer signup
+
+class TeamMember(BaseModel):
+    """One dialer login. The password is forwarded to the dialer once and is never stored by this site."""
+    model_config=ConfigDict(extra='forbid')
+    name: str=Field(min_length=2,max_length=150)
+    email: EmailStr
+    password: str=Field(min_length=12,max_length=128)
+    number: str=Field(default='',max_length=20)
+    @field_validator('name')
+    @classmethod
+    def clean_name(cls,v):
+        v=v.strip()
+        if len(v)<2 or any(ord(c)<32 for c in v): raise ValueError('Enter the full name of every user.')
+        return v
+    @field_validator('password')
+    @classmethod
+    def clean_password(cls,v):
+        if any(ord(c)<32 for c in v): raise ValueError('Passwords cannot contain control characters.')
+        return v
+
+class HoldData(BaseModel):
+    model_config=ConfigDict(extra='forbid')
+    token: str=Field(min_length=8,max_length=64)
+    plan: str=Field(max_length=40)
+    numbers: list[str]=Field(default_factory=list,max_length=100)
+    toll_free: bool=False
 
 class RequestData(BaseModel):
     model_config=ConfigDict(extra='forbid',str_strip_whitespace=True)
@@ -38,7 +65,9 @@ class RequestData(BaseModel):
     plan: str=Field(default='',max_length=40)
     users: int=Field(default=1,ge=1,le=100,strict=True)
     countries: list[str]=Field(default_factory=list,max_length=6)
-    addons: list[str]=Field(default_factory=list,max_length=4)
+    addons: list[str]=Field(default_factory=list,max_length=5)
+    team: list[TeamMember]=Field(default_factory=list,max_length=100)
+    hold_token: str=Field(default='',max_length=64)
     payment: str=Field(default='',max_length=30)
     number_preference: str=Field(default='',max_length=200)
     preferred_date: str=Field(default='',max_length=40)
@@ -94,6 +123,7 @@ def create_app(settings=None):
     settings=settings or Settings()
     (ROOT/'data').mkdir(exist_ok=True)
     engine,DB=make_database(settings.database_url)
+    dialer=Dialer(settings)
     templates=Jinja2Templates(directory=str(ROOT/'templates'))
     templates.env.filters['money']=lambda x: f'{float(x):,.2f}' if x is not None else 'Quote'
     templates.env.filters['stamp']=lambda x: aware(x).astimezone(timezone(timedelta(hours=5))).strftime('%d %b %Y, %I:%M %p PKT') if x else '-'
@@ -113,13 +143,82 @@ def create_app(settings=None):
         except ValueError: log.error('Stored prices are invalid; using defaults.'); apply_prices({})
         refresh_price_text(); price_state['stamp']=stamp
 
+    # Admin-managed plan names, descriptions, on/off and add-on labels (mkt_settings, key 'catalog').
+    cat_state={'checked':0.0,'stamp':None}
+    def load_catalog(force=False):
+        if not force and time.monotonic()-cat_state['checked']<30: return
+        cat_state['checked']=time.monotonic()
+        with DB() as db: row=db.get(Setting,'catalog')
+        stamp=(row.updated_at.isoformat() if row and row.updated_at else None)
+        if not force and stamp==cat_state['stamp']: return
+        apply_overrides((row.value or {}) if row else {}); cat_state['stamp']=stamp
+
+    def activate_in_dialer(ref,method,amount,reference=''):
+        """Ask the dialer to activate a paid order. Returns (outcome, result): done | expired | pending (retry later)."""
+        try: result=dialer.paid(ref,method,amount,reference); outcome='done'
+        except DialerError as exc:
+            result={'error':exc.detail}; outcome='expired' if exc.status==409 else 'pending'
+        with DB.begin() as db:
+            row=db.scalar(select(Submission).where(Submission.reference==ref))
+            if row:
+                details=dict(row.details or {}); details['activation']=outcome
+                if outcome=='done':
+                    missing=[u['email'] for u in result.get('users',[]) if u.get('numberless')]
+                    details['numberless']=missing
+                    body='Dialer accounts activated: 30-day plan started.'+(' No number could be assigned to: '+', '.join(missing)+'. Assign one in the dialer; the customer was told to contact us.' if missing else '')
+                elif outcome=='expired': body='PAID AFTER THE NUMBER HOLD EXPIRED. The pending dialer accounts were already removed. Create them manually in the dialer or refund the customer. ('+result.get('error','')+')'
+                else: body='Dialer activation failed ('+result.get('error','')+'). It is retried automatically every minute; or use Mark as paid in the dialer admin.'
+                row.details=details; row.updated_at=now()
+                db.add(Note(submission_id=row.id,body=body,author='Dialer'))
+        return outcome,result
+
+    def sweep_orders():
+        """Unpaid orders whose hold ended are deleted (and the dialer releases the numbers); failed activations are retried."""
+        with DB() as db:
+            waiting=db.scalars(select(Submission).where(Submission.kind=='order',Submission.status=='awaiting_payment')).all()
+            recent=db.scalars(select(Submission).where(Submission.kind=='order',Submission.status=='paid',Submission.created_at>now()-timedelta(days=3))).all()
+        for row in recent:
+            d=row.details or {}
+            if d.get('team') and d.get('activation')=='pending':
+                cp=d.get('card_payment') or {}
+                amount=(cp.get('amount_total') or 0)/100 or float(d.get('first_payment') or 0)
+                activate_in_dialer(row.reference,'stripe' if cp else d.get('payment','other'),amount,cp.get('session') or '')
+        for row in waiting:
+            d=row.details or {}
+            if not d.get('team'): continue
+            try: expires=aware(datetime.fromisoformat(d.get('hold_expires_at','')))
+            except ValueError: continue
+            if expires>now(): continue
+            session=(d.get('card_payment') or {}).get('session') or d.get('checkout_session')
+            if session and settings.stripe_ready:
+                state=checkout_status(settings.stripe_secret_key,session)
+                if state in ('complete','unknown'): continue          # paid (webhook will finish) or Stripe unreachable: try again later
+                if state=='open': expire_checkout(settings.stripe_secret_key,session)
+            try: outcome=dialer.cancel(row.reference).get('status')
+            except DialerError: continue
+            with DB.begin() as db:
+                cur=db.get(Submission,row.id)
+                if not cur or cur.status!='awaiting_payment': continue
+                if outcome=='paid':
+                    cur.status='paid'; cur.updated_at=now()
+                    db.add(Note(submission_id=cur.id,body='Marked paid in the dialer admin.',author='Dialer'))
+                else:
+                    db.add(Audit(actor='system',action='unpaid order expired and removed',reference=cur.reference)); db.delete(cur)
+
     @asynccontextmanager
     async def lifespan(app):
         settings.validate()
         init_database(engine)
-        try: load_prices(force=True)
+        try: load_prices(force=True); load_catalog(force=True)
         except SQLAlchemyError: log.exception('Could not load saved prices; using defaults.')
         stop=asyncio.Event()
+        async def order_loop():
+            while not stop.is_set():
+                try: await asyncio.to_thread(sweep_orders)
+                except Exception: log.exception('Order sweeper error')
+                try: await asyncio.wait_for(stop.wait(),timeout=45)
+                except asyncio.TimeoutError: pass
+        order_task=asyncio.create_task(order_loop()) if settings.dialer_ready else None
         async def mail_loop():
             while not stop.is_set():
                 try: await asyncio.to_thread(deliver_one,DB,settings)
@@ -130,9 +229,10 @@ def create_app(settings=None):
         yield
         stop.set()
         if task: await task
+        if order_task: await order_task
         engine.dispose()
     app=FastAPI(title='Dialnytics Marketing',lifespan=lifespan,docs_url=None,redoc_url=None,openapi_url=None)
-    app.state.settings=settings; app.state.DB=DB; app.state.engine=engine
+    app.state.settings=settings; app.state.DB=DB; app.state.engine=engine; app.state.dialer=dialer
     app.add_middleware(BodyLimit)
     app.mount('/static',StaticFiles(directory=str(ROOT/'static')),name='static')
 
@@ -157,7 +257,7 @@ def create_app(settings=None):
                     status_code=403
                 )
 
-        try: load_prices()
+        try: load_prices(); load_catalog()
         except SQLAlchemyError: log.warning('Price refresh skipped: database unavailable.')
         response = await call_next(request)
 
@@ -203,7 +303,7 @@ def create_app(settings=None):
     def render(request,name,context=None,status=200):
         csrf=request.cookies.get('mkt_form')
         if not valid_form_token(settings.secret,csrf,'public'): csrf=form_token(settings.secret,'public')
-        ctx={'business':BUSINESS,'plans':PLANS,'features':FEATURES,'faq':FAQ,
+        ctx={'business':BUSINESS,'plans':enabled_plans(),'features':FEATURES,'faq':FAQ,
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
              'catalog':client_catalog(),'pricing':price_view(),'addons':addon_view(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
@@ -270,14 +370,14 @@ def create_app(settings=None):
     def order(request:Request,plan:str):
         if plan=='team': return RedirectResponse('/get-started/usa-canada/?users=3',status_code=303)
         if plan in ('usa','canada'): plan='usa-canada'
-        if plan not in PLANS: raise HTTPException(404,'Plan not found.')
+        if plan not in PLANS or not PLANS[plan].get('enabled',True): raise HTTPException(404,'Plan not found.')
         return render(request,'order.html',{'plan_slug':plan,'plan':PLANS[plan],'page_title':'Build your '+PLANS[plan]['name']+' plan'})
     @app.get('/numbers/',response_class=HTMLResponse)
     def numbers(request:Request): return render(request,'countries.html',{'page_title':'Where will your next conversation go?'})
     @app.get('/numbers/{country}/',response_class=HTMLResponse)
     def country(request:Request,country:str):
         plan='usa-canada' if country in ('usa','canada') else country
-        if plan not in PLANS: raise HTTPException(404,'Country plan not found.')
+        if plan not in PLANS or not PLANS[plan].get('enabled',True): raise HTTPException(404,'Country plan not found.')
         title={'usa':'USA','canada':'Canada'}.get(country,PLANS[plan]['name'])
         return render(request,'country.html',{'plan_slug':plan,'plan':PLANS[plan],'country_name':title,'page_title':title+' business calling'})
     @app.get('/tools/',response_class=HTMLResponse)
@@ -317,6 +417,24 @@ def create_app(settings=None):
         try: return price_quote(data.get('plan'),data.get('users'),data.get('countries',[]),data.get('addons',[]))
         except (ValueError,TypeError): raise HTTPException(422,'Choose a valid plan, user count and destination selection.')
 
+    # ---------------------------------------------------------------- number picker (proxied to the dialer; keys never leave it)
+    @app.get('/api/numbers')
+    def list_numbers(request:Request,plan:str='',toll_free:int=0,token:str=''):
+        rate_limit(request,'numbers',200,600)
+        p=PLANS.get(plan)
+        if not p or not p.get('enabled',True) or p.get('price') is None: raise HTTPException(422,'Numbers are chosen after a quote for this plan.')
+        if toll_free and plan!='usa-canada': raise HTTPException(422,'Toll-free numbers are available for USA & Canada only.')
+        try: return JSONResponse({'numbers':dialer.numbers(plan,bool(toll_free),token[:64])},headers={'Cache-Control':'no-store'})
+        except DialerError as exc: raise HTTPException(503,exc.detail)
+
+    @app.post('/api/numbers/hold')
+    def hold_numbers(request:Request,data:HoldData):
+        require_public_csrf(request)
+        rate_limit(request,'hold',200,600)
+        if data.plan not in PLANS or any(not NUMBER_RE.fullmatch(n) for n in data.numbers): raise HTTPException(422,'Invalid number selection.')
+        try: return dialer.hold(data.token,data.plan,data.numbers,data.toll_free)
+        except DialerError as exc: raise HTTPException(503 if exc.status in (0,404) else 409,exc.detail)
+
     @app.post('/api/requests')
     def submit(request:Request,data:RequestData):
         require_public_csrf(request)
@@ -328,12 +446,24 @@ def create_app(settings=None):
                 raise HTTPException(422,'Enter a WhatsApp number with country code, for example +44 7700 900123.')
         if data.kind in ('contact','support','quote') and len(data.message)<10:
             raise HTTPException(422,'Please include at least 10 characters in your message.')
-        details={}
+        details={}; provision=False
         if data.kind=='order':
-            try: details=price_quote(data.plan,data.users,data.countries,data.addons)
+            numbers=[m.number.strip() for m in data.team if m.number.strip()]
+            try: details=price_quote(data.plan,data.users,data.countries,data.addons,numbers)
             except ValueError as exc: raise HTTPException(422,str(exc))
             if data.payment not in ('bank','usdt','stripe'): raise HTTPException(422,'Choose a payment preference.')
-            details.update(payment=data.payment,number_preference=data.number_preference)
+            details.update(payment=data.payment)
+            provision=details.get('monthly_total') is not None     # custom / European-number plans stay a quote enquiry
+            if provision:
+                if len(data.team)!=data.users: raise HTTPException(422,'Add the name, email, password and number for every user.')
+                mails=[str(m.email).lower() for m in data.team]
+                if len(set(mails))!=len(mails): raise HTTPException(422,'Each user needs a different email address.')
+                wants_tf='tollfree' in details['addon_keys']
+                for m in data.team:
+                    n=m.number.strip()
+                    if n and not NUMBER_RE.fullmatch(n): raise HTTPException(422,'Invalid number selected.')
+                    if n and is_toll_free(n)!=wants_tf: raise HTTPException(422,'Choose toll-free numbers only.' if wants_tf else 'Toll-free numbers need the Toll-free add-on.')
+                details['team']=[{'name':m.name,'email':str(m.email).lower(),'number':m.number.strip()} for m in data.team]
         if data.kind=='demo':
             if data.preferred_date:
                 try:
@@ -342,23 +472,39 @@ def create_app(settings=None):
             details.update(duration_minutes=15,preferred_date=data.preferred_date,preferred_time=data.preferred_time,timezone=data.timezone,confirmation='pending')
         if data.kind=='quote': details.update(plan=data.plan or 'custom',users=data.users)
         plain=data.model_dump(mode='json');plain.pop('idempotency_key');plain.pop('website')
+        for m in plain.get('team',[]): m.pop('password',None)       # a password must never feed a stored hash
         digest=sha(json.dumps(plain,sort_keys=True)); key=str(data.idempotency_key)
+        reference='DNY-'+now().strftime('%y%m%d')+'-'+key.replace('-','')[:12].upper()
         def receipt(row):
+            d=row.details or {}
             text_lines=[f'Hello Dialnytics, my {row.kind} request reference is {row.reference}.',f'Name: {row.name}']
             if row.kind=='order':
-                text_lines += [f'Plan: {row.details["plan_name"]}',f'Users: {row.details["users"]}',f'Monthly total: '+('$'+row.details['monthly_total']+' USD' if row.details.get('monthly_total') else 'Custom quote required'),f'Payment preference: {row.details["payment"]}']
-                if row.details.get('countries'): text_lines.append('Destinations: '+', '.join(row.details['countries']))
-                if row.details.get('addons'): text_lines.append('Add-ons: '+', '.join(a['name'] for a in row.details['addons']))
-                if row.details.get('one_time_total') not in (None,'0.00'): text_lines.append('One-time SMS registration: $'+row.details['one_time_total']+' USD')
-                if row.details.get('taxes_included'): text_lines.append('Prices include taxes.')
+                text_lines += [f'Plan: {d["plan_name"]}',f'Users: {d["users"]}',f'Monthly total: '+('$'+d['monthly_total']+' USD' if d.get('monthly_total') else 'Custom quote required'),f'Payment preference: {d["payment"]}']
+                if d.get('countries'): text_lines.append('Destinations: '+', '.join(d['countries']))
+                if d.get('addons'): text_lines.append('Add-ons: '+', '.join(a['name'] for a in d['addons']))
+                if d.get('sms_setup_total') not in (None,'0.00'): text_lines.append('One-time SMS registration: $'+d['sms_setup_total']+' USD')
+                if d.get('toll_free_total') not in (None,'0.00'): text_lines.append(f"Toll-free numbers x{d.get('toll_free_count')}: $"+d['toll_free_total']+' USD one-time')
+                if d.get('team'):
+                    picked=sorted({t['number'] for t in d['team'] if t['number']})
+                    if picked: text_lines.append('Reserved number(s): '+', '.join(picked))
+                    if d.get('first_payment'): text_lines.append('Amount due now: $'+d['first_payment']+' USD')
+                    text_lines.append(f"I will complete payment within {d.get('hold_minutes',60)} minutes.")
+                if d.get('taxes_included'): text_lines.append('Prices include taxes.')
             if row.kind=='demo': text_lines.append('Please confirm the timing of my 15-minute demo.')
             text_lines.append('Please confirm the next steps.');msg='\n'.join(text_lines)
-            out={'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
+            out={'saved':True,'reference':row.reference,'kind':row.kind,'quote':d if row.kind=='order' else None,
                  'whatsapp_url':'https://wa.me/'+BUSINESS['whatsapp']+'?'+urlencode({'text':msg}),'whatsapp_message':msg}
-            if row.kind=='order' and row.details.get('payment')=='stripe' and settings.stripe_ready and row.details.get('monthly_total') and row.status=='new':
+            if row.kind=='order' and d.get('team'):
+                out.update(provisioned=True,expires_at=d.get('hold_expires_at'),hold_minutes=d.get('hold_minutes'),team=d['team'])
+            if row.kind=='order' and d.get('payment')=='stripe' and settings.stripe_ready and d.get('monthly_total') and row.status in ('new','awaiting_payment'):
                 try:
-                    session=create_checkout(settings.stripe_secret_key,checkout_params(row.details,row.reference,row.email,settings.base_url,row.details['plan']),'dny-'+row.reference)
+                    expires=int(aware(row.created_at).timestamp())+31*60
+                    session=create_checkout(settings.stripe_secret_key,checkout_params(d,row.reference,row.email,settings.base_url,d['plan'],expires),'dny-'+row.reference)
                     out['checkout_url']=session.get('url')
+                    if session.get('id') and d.get('checkout_session')!=session.get('id'):
+                        with DB.begin() as db:
+                            cur=db.get(Submission,row.id)
+                            if cur: cd=dict(cur.details or {}); cd['checkout_session']=session.get('id'); cur.details=cd
                 except RuntimeError as exc: out['checkout_error']=str(exc)+' Continue on WhatsApp and we will send a card payment link.'
             return out
         with DB() as db:
@@ -367,9 +513,23 @@ def create_app(settings=None):
                 if existing.payload_hash!=digest: raise HTTPException(409,'This request key was already used. Reload before sending a different request.')
                 return receipt(existing)
         rate_limit(request,'public',15,3600)
-        row=Submission(id=str(uuid.uuid4()),reference='DNY-'+now().strftime('%y%m%d')+'-'+secrets.token_hex(6).upper(),
-                       idempotency_key=key,payload_hash=digest,kind=data.kind,name=data.name,email=str(data.email).lower(),phone=data.phone,
-                       company=data.company,subject=data.subject,message=data.message,details=details,status='new')
+        name,email=data.name,str(data.email).lower()
+        if provision:
+            name,email=data.team[0].name,str(data.team[0].email).lower()
+            minutes=10 if (data.payment=='stripe' and settings.stripe_ready) else 60
+            try:
+                made=dialer.create_order({'ref':reference,'token':(data.hold_token or key)[:64],'payment_method':data.payment,'plan_slug':data.plan,
+                    'plan_name':'1 USER ACCOUNT-'+PLANS[data.plan]['short'].replace(' ',''),'company_name':data.company,'whatsapp':data.phone,
+                    'addons':details['addon_keys'],'toll_free':'tollfree' in details['addon_keys'],'amount_usd':float(details['first_payment']),
+                    'hold_minutes':minutes,'members':[{'name':m.name,'email':str(m.email).lower(),'password':m.password,'number':m.number.strip()} for m in data.team]})
+            except DialerError as exc:
+                if exc.detail.startswith('UNAVAILABLE:'):
+                    raise HTTPException(409,'This number was just taken by someone else: '+exc.detail.split(':',1)[1].replace(',',', ')+'. Please choose another number.')
+                raise HTTPException(503 if exc.status in (0,404,500,502,503) else (409 if exc.status==409 else 422),exc.detail if exc.status else 'Your order was not saved. '+exc.detail)
+            details.update(hold_minutes=minutes,hold_expires_at=made.get('expires_at'),activation='waiting')
+        row=Submission(id=str(uuid.uuid4()),reference=reference,
+                       idempotency_key=key,payload_hash=digest,kind=data.kind,name=name,email=email,phone=data.phone,
+                       company=data.company,subject=data.subject,message=data.message,details=details,status='awaiting_payment' if provision else 'new')
         try:
             with DB.begin() as db:
                 db.add(row); db.flush()
@@ -383,6 +543,33 @@ def create_app(settings=None):
             log.exception('Marketing request could not be saved')
             raise HTTPException(503,'Your request was not saved. Please retry or contact us on WhatsApp directly.')
         return receipt(row)
+
+    # ---------------------------------------------------------------- calls from the dialer (shared secret)
+    def dialer_key_required(request):
+        sent=request.headers.get('x-marketing-key','')
+        if not settings.dialer_api_key or not sent or not hmac.compare_digest(sent,settings.dialer_api_key): raise HTTPException(404,'Not found.')
+    @app.post('/api/internal/orders/{ref}/paid')
+    async def internal_paid(request:Request,ref:str):
+        dialer_key_required(request)
+        try: body=await request.json()
+        except Exception: body={}
+        with DB.begin() as db:
+            row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order'))
+            if not row: return {'received':True}
+            if row.status!='paid':
+                d=dict(row.details or {}); d['activation']='done'; row.details=d; row.status='paid'; row.updated_at=now()
+                db.add(Note(submission_id=row.id,body=f"Marked as paid in the dialer admin ({body.get('method') or 'manual'}, ${body.get('amount_usd') or d.get('first_payment')}). Accounts are active.",author='Dialer'))
+        return {'received':True}
+    @app.post('/api/internal/orders/{ref}/cancelled')
+    async def internal_cancelled(request:Request,ref:str):
+        dialer_key_required(request)
+        with DB.begin() as db:
+            row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order',Submission.status=='awaiting_payment'))
+            if row:
+                session=(row.details or {}).get('checkout_session')
+                if session and settings.stripe_ready: expire_checkout(settings.stripe_secret_key,session)
+                db.add(Audit(actor='dialer',action='order cancelled in the dialer admin and removed',reference=row.reference)); db.delete(row)
+        return {'received':True}
 
     @app.get('/admin/login',response_class=HTMLResponse)
     def login_page(request:Request,error:str=''):
@@ -452,6 +639,17 @@ def create_app(settings=None):
     def update_request(request:Request,record_id:str,csrf:str=Form(...),status:str=Form(...),note:str=Form('')):
         sess=admin_required(request,csrf)
         if status not in STATUSES or len(note)>5000: raise HTTPException(422,'Invalid status or note length.')
+        with DB() as db:
+            current=db.get(Submission,record_id)
+            if not current: raise HTTPException(404,'Request not found.')
+            ref,old_status,cd=current.reference,current.status,dict(current.details or {})
+        if current.kind=='order' and cd.get('team') and old_status!=status:
+            if status=='paid' and cd.get('activation')!='done':
+                outcome,result=activate_in_dialer(ref,cd.get('payment','other'),float(cd.get('first_payment') or 0),'marketing admin')
+                if outcome!='done': return RedirectResponse('/admin/requests/'+record_id+'?error='+urlencode({'e':'Could not activate in the dialer: '+result.get('error','try again')})[2:],status_code=303)
+            elif status in ('spam','closed') and old_status=='awaiting_payment':
+                try: dialer.cancel(ref)
+                except DialerError as exc: return RedirectResponse('/admin/requests/'+record_id+'?error='+urlencode({'e':'Could not release the numbers in the dialer: '+exc.detail})[2:],status_code=303)
         with DB.begin() as db:
             row=db.get(Submission,record_id)
             if not row: raise HTTPException(404,'Request not found.')
@@ -479,6 +677,9 @@ def create_app(settings=None):
             row=db.get(Submission,record_id)
             if not row: raise HTTPException(404,'Request not found.')
             if confirm!=row.reference: raise HTTPException(422,'Type the exact request reference to confirm deletion.')
+            if row.kind=='order' and (row.details or {}).get('team') and row.status=='awaiting_payment':
+                try: dialer.cancel(row.reference)
+                except DialerError as exc: raise HTTPException(503,'Could not release the numbers in the dialer: '+exc.detail)
             audit(db,sess,'request erased',row.reference);db.delete(row)
         return RedirectResponse('/admin?deleted=1',status_code=303)
     @app.get('/admin/export.csv')
@@ -499,63 +700,6 @@ def create_app(settings=None):
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
 
-    @app.get('/admin/confirmed-orders', response_class=HTMLResponse)
-    def admin_confirmed_orders(request: Request, q: str = '', page: int = 1):
-        sess = admin_session(request)
-        if not sess:
-            return RedirectResponse('/admin/login', status_code=303)
-        q = q.strip()[:150]
-        page = max(1, min(page, 100000))
-        with DB() as db:
-            rows = db.scalars(select(Submission).where(
-                Submission.kind == 'order', Submission.status == 'paid'
-            ).order_by(Submission.updated_at.desc())).all()
-            confirmed = []
-            for row in rows:
-                details = row.details or {}
-                card = details.get('card_payment') or {}
-                # Only verified Stripe webhook records qualify, never manual status changes.
-                if not card.get('session') or not card.get('paid_at'):
-                    continue
-                if q and q.lower() not in ' '.join((row.reference, row.name, row.email,
-                          row.phone, str(details.get('plan_name', '')))).lower():
-                    continue
-                confirmed.append({'row': row, 'card': card, 'details': details})
-        count = len(confirmed)
-        pages = max(1, math.ceil(count / 25))
-        page = min(page, pages)
-        return render(request, 'admin_confirmed_orders.html', {
-            'page_title': 'Confirmed Orders', 'admin': sess,
-            'orders': confirmed[(page - 1) * 25:page * 25],
-            'count': count, 'page': page, 'pages': pages, 'q': q,
-            'pager_query': urlencode({'q': q}),
-        })
-
-    @app.get('/api/integrations/confirmed-orders')
-    def integration_confirmed_orders(request: Request):
-        """Read-only paid orders for the dialer admin. Never accepts payment claims."""
-        import os
-        token = os.getenv('DIALER_ORDERS_API_TOKEN', '').strip()
-        supplied = request.headers.get('authorization', '')
-        if len(token) < 32 or not hmac.compare_digest(supplied, 'Bearer ' + token):
-            raise HTTPException(401, 'Unauthorized')
-        with DB() as db:
-            rows = db.scalars(select(Submission).where(Submission.kind == 'order', Submission.status == 'paid').order_by(Submission.created_at.desc()).limit(500)).all()
-            orders = []
-            for row in rows:
-                details = row.details or {}
-                card = details.get('card_payment') or {}
-                if not card.get('session') or not card.get('paid_at'):
-                    continue  # manually marked paid orders are not Stripe-confirmed
-                orders.append({'reference': row.reference, 'name': row.name,
-                               'email': row.email, 'phone': row.phone,
-                               'plan': details.get('plan_name', ''), 'users': details.get('users', 1),
-                               'amount_usd': (card.get('amount_total') or 0) / 100,
-                               'paid_at': card['paid_at'], 'stripe_session': card['session'],
-                               'stripe_customer': card.get('customer', ''),
-                               'stripe_subscription': card.get('subscription', '')})
-        return JSONResponse({'orders': orders}, headers={'Cache-Control': 'no-store'})
-
     @app.post('/webhooks/stripe')
     async def stripe_webhook(request:Request):
         if not settings.stripe_ready: raise HTTPException(404,'Not found.')
@@ -565,15 +709,34 @@ def create_app(settings=None):
         obj=(event.get('data') or {}).get('object') or {}
         kind=event.get('type','')
         ref=obj.get('client_reference_id') or (obj.get('metadata') or {}).get('reference') or ''
+        if kind=='invoice.paid' and not ref:
+            ref=(((obj.get('subscription_details') or {}).get('metadata') or {}).get('reference')) or ''
+            if not ref and obj.get('subscription'):
+                with DB() as db:
+                    for r in db.scalars(select(Submission).where(Submission.kind=='order',Submission.status=='paid').order_by(Submission.created_at.desc()).limit(3000)).all():
+                        if ((r.details or {}).get('card_payment') or {}).get('subscription')==obj.get('subscription'): ref=r.reference; break
         if not ref: return {'received':True}
+        activate=renew=None
         with DB.begin() as db:
             row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order'))
             if not row: return {'received':True}
             details=dict(row.details or {}); card=dict(details.get('card_payment') or {})
             if kind=='checkout.session.completed' and obj.get('payment_status') in ('paid','no_payment_required'):
-                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),currency=obj.get('currency','usd'),paid_at=now().isoformat(),status='active')
+                if card.get('status')=='active' and card.get('session')==obj.get('id'): return {'received':True}   # duplicate delivery
+                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),paid_at=now().isoformat(),status='active')
                 row.status='paid'
-                db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Review the account, then activate.',author='Stripe'))
+                if details.get('team'):
+                    details['activation']='pending'
+                    activate=(row.reference,(obj.get('amount_total') or 0)/100,obj.get('id') or '')
+                    db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Activating the dialer accounts now.',author='Stripe'))
+                else: db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Review the account, then activate.',author='Stripe'))
+            elif kind=='invoice.paid' and obj.get('billing_reason')=='subscription_cycle':
+                done=list(card.get('invoices') or [])
+                if obj.get('id') in done: return {'received':True}
+                done.append(obj.get('id')); card['invoices']=done[-24:]
+                amount=(obj.get('amount_paid') or 0)/100
+                if details.get('team'): renew=(row.reference,amount,obj.get('id') or '')
+                db.add(Note(submission_id=row.id,body=f'Monthly renewal paid through Stripe (${amount:.2f}).'+(' Adding 30 days in the dialer.' if details.get('team') else ''),author='Stripe'))
             elif kind=='customer.subscription.deleted':
                 card.update(status='cancelled',cancelled_at=now().isoformat())
                 db.add(Note(submission_id=row.id,body='Stripe subscription cancelled.',author='Stripe'))
@@ -582,6 +745,13 @@ def create_app(settings=None):
                 db.add(Note(submission_id=row.id,body='Stripe renewal payment failed.',author='Stripe'))
             else: return {'received':True}
             details['card_payment']=card; row.details=details; row.updated_at=now()
+        if activate: await asyncio.to_thread(activate_in_dialer,activate[0],'stripe',activate[1],activate[2])
+        if renew:
+            try: await asyncio.to_thread(dialer.renew,*renew)
+            except DialerError as exc:
+                with DB.begin() as db:
+                    row=db.scalar(select(Submission).where(Submission.reference==ref))
+                    if row: db.add(Note(submission_id=row.id,body='Renewal was paid but the dialer could not extend the plan: '+exc.detail+' Use Extend in the dialer admin.',author='Dialer'))
         return {'received':True}
 
     @app.get('/order/thanks/',response_class=HTMLResponse)
@@ -648,6 +818,35 @@ def create_app(settings=None):
             audit(db,sess,('prices reset to defaults' if action=='reset' else 'prices updated: '+(', '.join(changed) or 'no change'))[:100],version[:32])
         load_prices(force=True)
         return RedirectResponse('/admin/pricing?'+('reset=1' if action=='reset' else 'saved=1'),status_code=303)
+
+    def catalog_form(values):
+        return {'plans':[{'slug':k,'name':values.get('plans',{}).get(k,{}).get('name') or v['name'],'description':values.get('plans',{}).get(k,{}).get('description') or v['description'],
+                          'enabled':values.get('plans',{}).get(k,{}).get('enabled',v.get('enabled',True))} for k,v in PLANS.items()],
+                'addons':[{'key':a['key'],'name':values.get('addons',{}).get(a['key'],{}).get('name') or a['name'],'note':values.get('addons',{}).get(a['key'],{}).get('note') or a['note'],
+                           'live':values.get('addons',{}).get(a['key'],{}).get('live',a['live'])} for a in ADDONS]}
+    @app.get('/admin/plans',response_class=HTMLResponse)
+    def admin_plans(request:Request):
+        sess=admin_session(request)
+        if not sess: return RedirectResponse('/admin/login',status_code=303)
+        load_catalog(force=True)
+        with DB() as db: row=db.get(Setting,'catalog')
+        return render(request,'admin_plans.html',{'page_title':'Plans & add-ons','admin':sess,'form':catalog_form({}),'row':row,'saved':request.query_params.get('saved')})
+    @app.post('/admin/plans')
+    async def admin_plans_save(request:Request):
+        form=await request.form()
+        sess=admin_required(request,str(form.get('csrf','')))
+        if str(form.get('action',''))=='reset': data={}
+        else:
+            data={'plans':{k:{'name':str(form.get('plan_name_'+k,''))[:60],'description':str(form.get('plan_desc_'+k,''))[:240],'enabled':form.get('plan_on_'+k)=='1'} for k in PLANS},
+                  'addons':{a['key']:{'name':str(form.get('addon_name_'+a['key'],''))[:60],'note':str(form.get('addon_note_'+a['key'],''))[:240],'live':form.get('addon_on_'+a['key'])=='1'} for a in ADDONS}}
+            if not any(v['enabled'] for v in data['plans'].values()): return RedirectResponse('/admin/plans?saved=none',status_code=303)
+        with DB.begin() as db:
+            row=db.get(Setting,'catalog')
+            if row: row.value=data; row.updated_by=sess.email; row.updated_at=now()
+            else: db.add(Setting(key='catalog',value=data,updated_by=sess.email,updated_at=now()))
+            audit(db,sess,'plans reset' if not data else 'plans and add-ons updated')
+        load_catalog(force=True); refresh_price_text()
+        return RedirectResponse('/admin/plans?saved=1',status_code=303)
 
     register_chat(app,settings,DB,render,require_public_csrf,rate_limit,admin_session,admin_required,audit)
 

@@ -1,4 +1,5 @@
 """Owner-approved marketing prices. Never trust a price sent by a browser."""
+import re
 from decimal import Decimal
 
 CATALOG_VERSION = '2026-10-22.1'   # replaced with a version stamp when an admin saves new prices
@@ -30,6 +31,10 @@ ADDONS = [
      'note': '300 texts per user each month from your business number. Needs A2P 10DLC registration (one-time fee).'},
     {'key': 'ai', 'name': 'AI call insights', 'field': 'addon_ai', 'live': True, 'page': '/product/ai-insights/',
      'note': 'Summary, transcript and coaching tips after each call.'},
+    # One-time charge per number (not per user, not monthly). USA & Canada only.
+    {'key': 'tollfree', 'name': 'Toll-free number', 'field': 'toll_free', 'live': True, 'one_time': True,
+     'regions': ['usa-canada'], 'page': '/numbers/usa/',
+     'note': 'Choose a toll-free US/Canada number instead of a local number. One-time charge per number.'},
 ]
 ADDON_KEYS = [a['key'] for a in ADDONS]
 ORDERABLE_ADDONS = [a['key'] for a in ADDONS if a['live']]
@@ -70,6 +75,7 @@ PRICE_FIELDS = [
     ('addon_sms', 'SMS texting (per user / month)', 'Add-ons', '8', '0', '1000'),
     ('addon_ai', 'AI call insights (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('sms_setup', 'SMS registration (one-time, per account)', 'Add-ons', '30', '0', '5000'),
+    ('toll_free', 'Toll-free number (one-time, per number)', 'Add-ons', '10', '0', '1000'),
 ]
 DEFAULT_PRICES = {k: Decimal(d) for k, _, _, d, _, _ in PRICE_FIELDS}
 PRICES = dict(DEFAULT_PRICES)
@@ -117,16 +123,28 @@ def price_view() -> dict:
             'eu_1': usd(p['eu_1']),
             'addon_recording': usd(p['addon_recording']), 'addon_campaigns': usd(p['addon_campaigns']),
             'addon_sms': usd(p['addon_sms']), 'addon_ai': usd(p['addon_ai']), 'sms_setup': usd(p['sms_setup']),
+            'toll_free': usd(p['toll_free']),
             'from': usd(min(p['usa_per'], p['uk'], p['australia'], p['japan'], p['global'])),
             'sms_texts': SMS_TEXTS_PER_USER}
 
 def addon_view() -> list:
     """Add-ons with their current price, for templates."""
-    return [{**a, 'price': usd(PRICES[a['field']])} for a in ADDONS]
+    return [{**a, 'price': usd(PRICES[a['field']]), 'one_time': bool(a.get('one_time')), 'regions': a.get('regions', [])} for a in ADDONS]
 
-def price_quote(plan: str, seats: int, countries: list[str] | None = None, addons: list[str] | None = None) -> dict:
+TOLL_FREE_RE = re.compile(r'^\+(1(800|833|844|855|866|877|888)|44(800|808))')
+NUMBER_RE = re.compile(r'^\+[1-9][0-9]{7,14}$')
+
+def is_toll_free(number: str) -> bool:
+    return bool(TOLL_FREE_RE.match(number or ''))
+
+def price_quote(plan: str, seats: int, countries: list[str] | None = None, addons: list[str] | None = None,
+                numbers: list[str] | None = None) -> dict:
+    """`numbers` = the numbers the buyer picked (one per user; users may share one). Toll-free is charged
+    once per DISTINCT toll-free number. Before numbers are picked the quote assumes one per user."""
     if plan not in PLANS:
         raise ValueError('Choose a valid country plan.')
+    if not PLANS[plan].get('enabled', True):
+        raise ValueError('This plan is not available right now.')
     if isinstance(seats, bool) or not isinstance(seats, int) or not 1 <= seats <= 100:
         raise ValueError('Choose between 1 and 100 users. Contact us for a larger team.')
     countries = countries or []
@@ -137,6 +155,8 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
         raise ValueError('Choose valid add-ons.')
     if any(a not in ORDERABLE_ADDONS for a in addons):
         raise ValueError('AI insights is coming soon and cannot be ordered yet.')
+    if 'tollfree' in addons and plan not in next(a for a in ADDONS if a['key'] == 'tollfree')['regions']:
+        raise ValueError('Toll-free numbers are available for the USA & Canada plan only.')
     addons = [k for k in ADDON_KEYS if k in addons]  # stable order
     if plan == 'uk-to-europe':
         if not 1 <= len(countries) <= 6 or len(set(countries)) != len(countries):
@@ -151,24 +171,58 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
     else:
         total = Decimal(PLANS[plan]['price']) * seats
     by_key = {a['key']: a for a in ADDONS}
+    monthly_keys = [k for k in addons if not by_key[k].get('one_time')]
     lines = [{'key': k, 'name': by_key[k]['name'], 'per_user': f"{PRICES[by_key[k]['field']]:.2f}",
-              'total': f"{PRICES[by_key[k]['field']] * seats:.2f}"} for k in addons]
-    addons_total = sum((PRICES[by_key[k]['field']] * seats for k in addons), Decimal('0'))
-    one_time = PRICES['sms_setup'] if 'sms' in addons else Decimal('0')
+              'total': f"{PRICES[by_key[k]['field']] * seats:.2f}"} for k in monthly_keys]
+    addons_total = sum((PRICES[by_key[k]['field']] * seats for k in monthly_keys), Decimal('0'))
+    sms_setup = PRICES['sms_setup'] if 'sms' in addons else Decimal('0')
+    tf_count = 0
+    if 'tollfree' in addons:
+        picked = {n for n in (numbers or []) if n}
+        tf_count = len({n for n in picked if is_toll_free(n)}) if picked else seats
+    tf_total = PRICES['toll_free'] * tf_count
+    one_time = sms_setup + tf_total
     monthly = total + addons_total if total is not None else None
     return {'plan': plan, 'plan_name': PLANS[plan]['name'], 'users': seats,
             'countries': countries if plan == 'uk-to-europe' else [],
             'plan_total': f'{total:.2f}' if total is not None else None,
             'per_user': f'{total / seats:.2f}' if total is not None else None,
+            'addon_keys': addons,
             'addons': lines, 'addons_total': f'{addons_total:.2f}',
             'monthly_total': f'{monthly:.2f}' if monthly is not None else None,
+            'sms_setup_total': f'{sms_setup:.2f}',
+            'toll_free_count': tf_count, 'toll_free_each': f"{PRICES['toll_free']:.2f}", 'toll_free_total': f'{tf_total:.2f}',
             'one_time_total': f'{one_time:.2f}',
             'first_payment': f'{monthly + one_time:.2f}' if monthly is not None else None,
             'setup_fee': '0.00', 'extra_charges': '0.00', 'taxes_included': True, 'currency': 'USD',
             'catalog_version': CATALOG_VERSION}
 
+def enabled_plans() -> dict:
+    return {k: v for k, v in PLANS.items() if v.get('enabled', True)}
+
 def client_catalog() -> dict:
-    return {'version': CATALOG_VERSION, 'plans': PLANS, 'europe_totals': {str(k): str(v) for k,v in EUROPE_TOTALS.items()}, 'countries': EUROPE_COUNTRIES,
+    return {'version': CATALOG_VERSION, 'plans': enabled_plans(), 'europe_totals': {str(k): str(v) for k,v in EUROPE_TOTALS.items()}, 'countries': EUROPE_COUNTRIES,
             'usa': {'one': str(PRICES['usa_1']), 'two': str(PRICES['usa_2']), 'per': str(PRICES['usa_per'])},
-            'addons': [{'key': a['key'], 'name': a['name'], 'price': str(PRICES[a['field']]), 'live': a['live'], 'note': a['note']} for a in ADDONS],
-            'sms_setup': str(PRICES['sms_setup'])}
+            'addons': [{'key': a['key'], 'name': a['name'], 'price': str(PRICES[a['field']]), 'live': a['live'], 'note': a['note'],
+                        'one_time': bool(a.get('one_time')), 'regions': a.get('regions', [])} for a in ADDONS],
+            'sms_setup': str(PRICES['sms_setup']), 'toll_free': str(PRICES['toll_free'])}
+
+# ---------------------------------------------------------------- admin-editable names / descriptions / on-off
+_PLAN_DEFAULTS = {k: {'name': v['name'], 'description': v['description']} for k, v in PLANS.items()}
+_ADDON_DEFAULTS = {a['key']: {'name': a['name'], 'note': a['note'], 'live': a['live']} for a in ADDONS}
+
+def apply_overrides(data: dict | None) -> None:
+    """data = {'plans': {slug: {name, description, enabled}}, 'addons': {key: {name, note, live}}}. Unknown keys are ignored."""
+    data = data or {}
+    for slug, p in PLANS.items():
+        o = (data.get('plans') or {}).get(slug) or {}
+        p['name'] = (str(o.get('name') or '').strip()[:60]) or _PLAN_DEFAULTS[slug]['name']
+        p['description'] = (str(o.get('description') or '').strip()[:240]) or _PLAN_DEFAULTS[slug]['description']
+        p['enabled'] = bool(o.get('enabled', True))
+    for a in ADDONS:
+        o = (data.get('addons') or {}).get(a['key']) or {}
+        a['name'] = (str(o.get('name') or '').strip()[:60]) or _ADDON_DEFAULTS[a['key']]['name']
+        a['note'] = (str(o.get('note') or '').strip()[:240]) or _ADDON_DEFAULTS[a['key']]['note']
+        a['live'] = bool(o.get('live', _ADDON_DEFAULTS[a['key']]['live']))
+    global ORDERABLE_ADDONS
+    ORDERABLE_ADDONS[:] = [a['key'] for a in ADDONS if a['live']]
