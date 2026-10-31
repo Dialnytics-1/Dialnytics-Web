@@ -1,1 +1,13 @@
-{% extends "admin_base.html" %}{% block content %}<h1>Owned phone numbers</h1><p>Only enter numbers already purchased in Telnyx or Twilio. Adding a number here does not purchase or configure it.</p><form method="post" action="/admin/numbers"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><label>Phone number (E.164) <input name="number" placeholder="+12025550123" required></label><label>Country <select name="country"><option>US</option><option>CA</option><option value="GB">UK (GB)</option></select></label><label>Provider <select name="provider"><option value="telnyx">Telnyx</option><option value="twilio">Twilio</option></select></label><label>Type <select name="number_type"><option value="local">Local</option><option value="toll_free">Toll-free</option></select></label><button type="submit">Add owned number</button></form><h2>Inventory</h2><table><thead><tr><th>Number</th><th>Country</th><th>Provider</th><th>Type</th><th>Status</th></tr></thead><tbody>{% for n in rows %}<tr><td>{{ n.e164 }}</td><td>{{ n.country }}</td><td>{{ n.provider }}</td><td>{{ n.number_type }}</td><td>{{ n.status }}</td></tr>{% endfor %}</tbody></table>{% endblock %}
+{% extends "admin_base.html" %}{% block content %}
+<h1>Owned phone numbers</h1>
+<p>Automatically synchronized from the Dialer provider accounts. Only purchased, unassigned numbers are shown to customers. No number is purchased by this page.</p>
+<form method="post" action="/admin/numbers/sync">
+<input type="hidden" name="csrf" value="{{ admin.csrf }}">
+<button type="submit">Sync Numbers Now</button>
+</form>
+<p>If provider credentials are not configured on staging, the sync will fail safely without releasing reserved numbers.</p>
+<h2>Inventory</h2>
+<table><thead><tr><th>Number</th><th>Country</th><th>Provider</th><th>Type</th><th>Status</th></tr></thead><tbody>
+{% for n in rows %}<tr><td>{{ n.e164 }}</td><td>{{ n.country }}</td><td>{{ n.provider }}</td><td>{{ n.number_type }}</td><td>{{ n.status }}</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

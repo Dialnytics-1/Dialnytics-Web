@@ -628,8 +628,30 @@ def create_app(settings=None):
     def checkout_inventory_mode():
         return {'required':os.getenv('DIALNYTICS_REQUIRE_OWNED_NUMBERS')=='1'}
 
+    @app.post('/admin/numbers/sync')
+    def admin_numbers_sync(request: Request, csrf: str = Form(...)):
+        sess = admin_session(request)
+        if not sess or not hmac.compare_digest(csrf, sess.csrf):
+            raise HTTPException(403, 'Admin required')
+        from .number_sync import sync_inventory
+        try:
+            result = sync_inventory(DB, force=True)
+        except Exception:
+            log.exception('Dialer number inventory sync failed')
+            raise HTTPException(503, 'Dialer inventory unavailable. Existing reservations preserved.')
+        with DB.begin() as db:
+            audit(db, sess, 'inventory synchronized', str(result['total']))
+        return RedirectResponse('/admin/numbers', status_code=303)
+
     @app.get('/api/numbers/available')
     def available_owned_numbers(country: str = 'US', number_type: str = 'local'):
+        if os.getenv('DIALER_INTERNAL_URL'):
+            from .number_sync import sync_inventory
+            try:
+                sync_inventory(DB)
+            except Exception:
+                log.exception('Checkout inventory refresh failed')
+                raise HTTPException(503, 'Number availability temporarily unavailable')
         if country not in ('US','CA','GB') or number_type not in ('local','toll_free'):
             raise HTTPException(422,'Unsupported number filter')
         with DB() as db:
@@ -642,6 +664,10 @@ def create_app(settings=None):
     def admin_numbers(request:Request):
         sess=admin_session(request)
         if not sess: return RedirectResponse('/admin/login',status_code=303)
+        if os.getenv('DIALER_INTERNAL_URL'):
+            from .number_sync import sync_inventory
+            try: sync_inventory(DB)
+            except Exception: log.warning('Inventory refresh unavailable', exc_info=True)
         with DB() as db: rows=db.scalars(select(PhoneInventory).order_by(PhoneInventory.country,PhoneInventory.e164)).all()
         return render(request,'admin_numbers.html',{'page_title':'Owned number inventory','admin':sess,'rows':rows})
 
