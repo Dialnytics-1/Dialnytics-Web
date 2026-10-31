@@ -26,7 +26,7 @@ ADDONS = [
     {'key': 'recording', 'name': 'Call recording', 'field': 'addon_recording', 'live': True, 'page': '/product/call-recording/',
      'note': 'Record calls and play them back or download them from the dialer.'},
     {'key': 'campaigns', 'name': 'Campaigns & Power Dialer', 'field': 'addon_campaigns', 'live': True, 'page': '/product/campaigns/',
-     'note': 'Build lists from your CRM and let the dialer call them one after another.'},
+     'note': 'Power Dialer, campaigns, CRM and follow-ups: build lists and let the dialer call them one after another.'},
     {'key': 'sms', 'name': 'SMS texting', 'field': 'addon_sms', 'live': True, 'page': '/product/sms/',
      'note': '300 texts per user each month from your business number. Needs A2P 10DLC registration (one-time fee).'},
     {'key': 'ai', 'name': 'AI call insights', 'field': 'addon_ai', 'live': True, 'page': '/product/ai-insights/',
