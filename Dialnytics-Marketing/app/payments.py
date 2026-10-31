@@ -15,13 +15,16 @@ def _cents(value) -> int:
     return int((Decimal(str(value)) * 100).quantize(Decimal('1')))
 
 
-def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan_slug: str) -> list[tuple[str, str]]:
+def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan_slug: str, expires_at: int | None = None) -> list[tuple[str, str]]:
     """Form fields for POST /v1/checkout/sessions built from a server quote."""
     users = quote['users']
     items = [(f"Dialnytics {quote['plan_name']} plan ({users} user{'s' if users != 1 else ''})", quote['plan_total'], True)]
     items += [(f"{a['name']} add-on ({users} user{'s' if users != 1 else ''})", a['total'], True) for a in quote.get('addons', [])]
-    if Decimal(quote.get('one_time_total') or '0') > 0:
-        items.append(('SMS A2P 10DLC registration (one-time)', quote['one_time_total'], False))
+    if Decimal(quote.get('sms_setup_total') or '0') > 0:
+        items.append(('SMS A2P 10DLC registration (one-time)', quote['sms_setup_total'], False))
+    if Decimal(quote.get('toll_free_total') or '0') > 0:
+        n = quote.get('toll_free_count', 1)
+        items.append((f"Toll-free number x{n} (one-time)", quote['toll_free_total'], False))
     p: list[tuple[str, str]] = [
         ('mode', 'subscription'),
         ('client_reference_id', reference),
@@ -32,6 +35,7 @@ def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan
         ('subscription_data[metadata][reference]', reference),
         ('allow_promotion_codes', 'false'),
     ]
+    if expires_at: p.append(('expires_at', str(int(expires_at))))   # Stripe minimum is 30 min after creation; the number hold is shorter and the site expires the session itself
     for i, (name, amount, recurring) in enumerate(items):
         k = f'line_items[{i}]'
         p += [(f'{k}[quantity]', '1'), (f'{k}[price_data][currency]', 'usd'),
@@ -39,8 +43,7 @@ def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan
               (f'{k}[price_data][product_data][name]', name),
               (f'{k}[price_data][tax_behavior]', 'inclusive')]
         if recurring:
-            p.extend([(f'{k}[price_data][recurring][interval]', 'day'),
-                      (f'{k}[price_data][recurring][interval_count]', '30')])
+            p.append((f'{k}[price_data][recurring][interval]', 'month'))
     return p
 
 
@@ -76,3 +79,26 @@ def verify_webhook(payload: bytes, header: str, secret: str, tolerance=300, now=
     if not any(hmac.compare_digest(expected, sig) for sig in parts.get('v1', [])):
         raise ValueError('bad signature')
     return json.loads(payload)
+
+
+def expire_checkout(secret_key: str, session_id: str, timeout=15) -> bool:
+    """Close an unpaid Checkout Session so nobody can pay for a released number. False if it was already finished."""
+    if not session_id: return False
+    req = urllib.request.Request(f'{STRIPE_API}/checkout/sessions/{urllib.parse.quote(session_id)}/expire', data=b'', method='POST',
+                                 headers={'Authorization': 'Bearer ' + secret_key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r: r.read(); return True
+    except urllib.error.HTTPError as e:
+        log.info('Stripe session %s was not expired (%s)', session_id, e.code); return False
+    except (urllib.error.URLError, TimeoutError): return False
+
+
+def checkout_status(secret_key: str, session_id: str, timeout=15) -> str:
+    """'open' | 'complete' | 'expired' | 'unknown' (network trouble)."""
+    req = urllib.request.Request(f'{STRIPE_API}/checkout/sessions/{urllib.parse.quote(session_id)}', method='GET',
+                                 headers={'Authorization': 'Bearer ' + secret_key})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r: return json.loads(r.read()).get('status') or 'unknown'
+    except urllib.error.HTTPError as e:
+        return 'expired' if e.code == 404 else 'unknown'
+    except (urllib.error.URLError, TimeoutError): return 'unknown'

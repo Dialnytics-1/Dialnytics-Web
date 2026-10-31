@@ -20,6 +20,23 @@ def app(tmp_path):
 def client(app):
     with TestClient(app) as client: yield client
 
+class FakeDialer:
+    """Stands in for the real dialer so tests never touch the network."""
+    created=[]
+    @staticmethod
+    def install(monkeypatch):
+        from app.dialer import Dialer
+        FakeDialer.created=[]
+        monkeypatch.setattr(Dialer,'numbers',lambda self,plan,toll_free,token='':['+18005550101','+18005550102'] if toll_free else ['+12125550101','+12125550102'])
+        monkeypatch.setattr(Dialer,'hold',lambda self,token,plan,numbers,toll_free:{'held':numbers,'unavailable':[],'expires_at':None})
+        def create(self,body):
+            FakeDialer.created.append(body); return {'ok':True,'expires_at':(now()+timedelta(minutes=body['hold_minutes'])).isoformat()}
+        monkeypatch.setattr(Dialer,'create_order',create)
+        monkeypatch.setattr(Dialer,'cancel',lambda self,ref:{'status':'cancelled'})
+
+def team(n,numbers=None):
+    return [dict(name=f'User {i+1}',email=f'user{i+1}@example.org',password='A-long-test-password-1',number=(numbers or [''])[min(i,len(numbers or [''])-1)]) for i in range(n)]
+
 def public_token(client,path='/contact/'):
     page=client.get(path)
     assert page.status_code==200
@@ -98,14 +115,38 @@ def test_consent_required(client):
     p=request_payload();p['consent']=False
     assert submit(client,p).status_code==422
 
-def test_server_pricing_and_no_payment_claim(client,app):
-    p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=2,payment='stripe')
+def test_server_pricing_and_no_payment_claim(client,app,monkeypatch):
+    FakeDialer.install(monkeypatch)
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=2,payment='stripe',team=team(2,['+12125550101']))
     r=submit(client,p);assert r.status_code==200,r.text
     assert r.json()['quote']['monthly_total']=='40.00'
     assert 'paid' not in r.json()
-    with app.state.DB() as db: assert db.scalar(select(Submission)).status=='new'
+    with app.state.DB() as db:
+        row=db.scalar(select(Submission));assert row.status=='awaiting_payment'
+        assert 'A-long-test-password-1' not in str(row.details)+row.message and 'password' not in str(row.details)
+    sent=FakeDialer.created[0];assert len(sent['members'])==2 and sent['members'][0]['password']=='A-long-test-password-1' and sent['hold_minutes']==60
     p['idempotency_key']=str(uuid.uuid4());p['monthly_total']='0.01'
     assert submit(client,p).status_code==422
+
+def test_order_needs_team_and_rejects_toll_free_mismatch(client,app,monkeypatch):
+    FakeDialer.install(monkeypatch)
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=2,payment='bank',team=team(1))
+    assert submit(client,p).status_code==422
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=1,payment='bank',team=team(1,['+18005550101']))
+    assert submit(client,p).status_code==422        # toll-free number without the add-on
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=2,payment='bank',addons=['tollfree'],team=team(2,['+18005550101']))
+    r=submit(client,p);assert r.status_code==200,r.text
+    q=r.json()['quote'];assert q['toll_free_count']==1 and q['toll_free_total']=='10.00' and q['one_time_total']=='10.00'   # two users share one number
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=1,payment='bank',addons=['tollfree'],team=team(1))
+    assert submit(client,p).status_code==422        # toll-free is USA & Canada only
+
+def test_dialer_down_saves_nothing(client,app,monkeypatch):
+    from app.dialer import Dialer, DialerError
+    def boom(self,body): raise DialerError(0,'Number selection is temporarily unavailable.')
+    monkeypatch.setattr(Dialer,'create_order',boom)
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=1,payment='bank',team=team(1))
+    assert submit(client,p).status_code==503
+    with app.state.DB() as db: assert db.scalar(select(Submission)) is None
 
 def test_demo(client,app):
     p=request_payload();p.update(kind='demo',phone='+447700900123',preferred_date=(now()+timedelta(days=2)).date().isoformat(),preferred_time='15:00')
@@ -231,7 +272,7 @@ def test_admin_session_invalidated_on_password_change(client,app):
     assert client.get('/admin',follow_redirects=False).status_code==303
 
 
-def test_admin_pricing_editor(client,app):
+def test_admin_pricing_editor(client,app,monkeypatch):
     from app.catalog import apply_prices
     try:
         assert client.get('/admin/pricing',follow_redirects=False).status_code==303
@@ -246,7 +287,8 @@ def test_admin_pricing_editor(client,app):
         ok=client.post('/admin/pricing',data={**form,'usa_per':'20','japan':'59.50','csrf':csrf});assert ok.status_code==200 and 'Prices saved' in ok.text
         assert '$20/user' in client.get('/pricing/').text
         assert '$59.50' in client.get('/numbers/japan/').text
-        p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=3,payment='stripe')
+        FakeDialer.install(monkeypatch)
+        p=request_payload();p.update(kind='order',phone='+447700900123',plan='usa-canada',users=3,payment='stripe',team=team(3))
         r=submit(client,p);assert r.status_code==200,r.text;assert r.json()['quote']['monthly_total']=='60.00'
         reset=client.post('/admin/pricing',data={**form,'action':'reset','csrf':csrf});assert reset.status_code==200
         assert '$18/user' in client.get('/pricing/').text
@@ -262,14 +304,15 @@ def test_whatsapp_ai_commands():
     assert bot.chat_command('#ai on') is True and bot.chat_command('#AI OFF') is False and bot.chat_command('ai on') is None
 
 
-def test_addons_quote_and_order(client,app):
+def test_addons_quote_and_order(client,app,monkeypatch):
+    FakeDialer.install(monkeypatch)
     from app.catalog import price_quote
     q=price_quote('uk',3,addons=['recording','sms'])
     assert q['plan_total']=='87.00' and q['addons_total']=='39.00' and q['monthly_total']=='126.00'
     assert q['one_time_total']=='30.00' and q['first_payment']=='156.00' and q['taxes_included'] is True
     assert price_quote('uk',1,addons=['ai'])['addons'][0]['key']=='ai'
     with pytest.raises(ValueError): price_quote('uk',1,addons=['bogus'])
-    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=3,payment='bank',addons=['recording','sms'])
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=3,payment='bank',addons=['recording','sms'],team=team(3))
     r=submit(client,p);assert r.status_code==200,r.text
     assert r.json()['quote']['monthly_total']=='126.00'
     assert 'Add-ons: Call recording, SMS texting' in r.json()['whatsapp_message']

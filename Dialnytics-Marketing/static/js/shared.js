@@ -63,20 +63,15 @@ export async function copyText(text, button) {
     else { button.textContent='Select and copy the message above'; area.addEventListener('blur',()=>area.remove(),{once:true}); }
   }
 }
-// CRM + Power Dialer is billed once per customer account, not per seat.
-// Other add-ons retain their existing per-seat billing rules.
-export function addonQuote(catalog, keys, users) {
-  const seats = Number(users);
-  if (!Number.isInteger(seats) || seats < 1 || seats > 100) throw new Error('Invalid seat count');
+// Add-ons are priced per user per month. One-time charges: the SMS registration (per account) and the
+// toll-free number (per DISTINCT number; `numberCount` defaults to one per user until numbers are picked).
+export function addonQuote(catalog, keys, users, numberCount = users) {
   const list = (catalog.addons || []).filter(a => a.live && keys.includes(a.key));
-  const lines = list.map(a => {
-    const accountWide = a.key === 'campaigns' || a.billing_scope === 'account';
-    const rate = accountWide && seats > 1 ? Number(a.team_price ?? a.price) : Number(a.price);
-    if (!Number.isFinite(rate) || rate < 0) throw new Error('Invalid add-on price');
-    const cents = Math.round(rate * 100) * (accountWide ? 1 : seats);
-    return {key:a.key, name:a.name, total:cents / 100};
-  });
-  const monthly = lines.reduce((sum, line) => sum + Math.round(line.total * 100), 0) / 100;
-  const oneTime = keys.includes('sms') ? Number(catalog.sms_setup || 0) : 0;
-  return {lines, monthly, oneTime, keys:list.map(a => a.key)};
+  const monthlyList = list.filter(a => !a.one_time);
+  const lines = monthlyList.map(a => ({ key: a.key, name: a.name, total: Math.round(Number(a.price) * 100) * users / 100 }));
+  const monthly = lines.reduce((sum, l) => sum + Math.round(l.total * 100), 0) / 100;
+  const sms = keys.includes('sms') ? Number(catalog.sms_setup || 0) : 0;
+  const tollFree = keys.includes('tollfree') ? Math.round(Number(catalog.toll_free || 0) * 100) * numberCount / 100 : 0;
+  return { lines, monthly, oneTime: Math.round((sms + tollFree) * 100) / 100, sms, tollFree, keys: list.map(a => a.key),
+           names: list.map(a => a.name) };
 }

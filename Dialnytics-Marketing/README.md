@@ -5,7 +5,9 @@ forms database, marketing admin and email-notification outbox.
 
 **Do not upload this project over the working dialer repository or Render service.**
 The existing dialer stays at **https://dialnytics.co.uk**. This app contains no
-Telnyx/Twilio credentials and does not create or modify dialer accounts.
+Telnyx/Twilio credentials. Since the website-order update it talks to the dialer only through a
+secured server-to-server API (see **docs/DIALER_INTEGRATION.md**): number search, number hold, pending
+account creation and activation after payment.
 
 ## Start here
 
@@ -90,8 +92,9 @@ backend access, or copied customer media.
 - Email-notification status, retries and administrative audit events.
 - Confirmed deletion of a request and its notes/email job.
 - Server-side sessions, CSRF checks, login throttling and safe CSV export.
-- **Marking Paid is an internal workflow action. It does not charge a card or
-  activate a dialer. Demo Confirmed does not send an automatic WhatsApp message.**
+- **Order status Paid** activates the pending dialer accounts (30-day plan, add-ons, number) for orders that
+  created accounts. For quote-only plans it stays an internal action. Demo Confirmed does not send a WhatsApp message.
+- `/admin/plans`: rename plans/add-ons, edit descriptions, hide a plan, switch an add-on on/off. `/admin/pricing`: all prices incl. the toll-free number price.
 
 ## Confirmed commercial settings
 

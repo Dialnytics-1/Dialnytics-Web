@@ -37,6 +37,11 @@ class Settings:
     # Card checkout (Stripe). Off unless both are set. Never expose these to the browser.
     stripe_secret_key: str = field(default_factory=lambda: os.getenv('STRIPE_SECRET_KEY','').strip())
     stripe_webhook_secret: str = field(default_factory=lambda: os.getenv('STRIPE_WEBHOOK_SECRET','').strip())
+    # Dialer connection (server-to-server). The SAME secret must be set as MARKETING_API_KEY on the dialer.
+    dialer_api_url: str = field(default_factory=lambda: os.getenv('DIALER_API_URL','https://dialnytics.co.uk').strip().rstrip('/'))
+    dialer_api_key: str = field(default_factory=lambda: os.getenv('DIALER_API_KEY','').strip())
+    @property
+    def dialer_ready(self): return bool(self.dialer_api_url.startswith('https://') or not self.production) and len(self.dialer_api_key) >= 24
     @property
     def stripe_ready(self): return self.stripe_secret_key.startswith(('sk_live_','sk_test_','rk_live_','rk_test_')) and self.stripe_webhook_secret.startswith('whsec_')
     @property
