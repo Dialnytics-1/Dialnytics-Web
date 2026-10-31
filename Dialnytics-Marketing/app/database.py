@@ -1,6 +1,6 @@
 """Marketing-only storage. Refuses to initialise inside an existing dialer database."""
-from datetime import datetime
-from sqlalchemy import create_engine, inspect, event, String, Text, DateTime, Integer, Boolean, JSON, ForeignKey, UniqueConstraint, text
+from datetime import datetime, date
+from sqlalchemy import create_engine, inspect, event, String, Text, DateTime, Date, Integer, Boolean, JSON, ForeignKey, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped, sessionmaker
 from .security import now
 
@@ -67,6 +67,53 @@ class Setting(Base):
     value: Mapped[dict]=mapped_column(JSON,default=dict)
     updated_by: Mapped[str]=mapped_column(String(254),default='')
     updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+
+class PhoneInventory(Base):
+    """Numbers already owned by the business; not a provider purchasing API."""
+    __tablename__='mkt_phone_inventory'
+    id: Mapped[str]=mapped_column(String(36),primary_key=True)
+    e164: Mapped[str]=mapped_column(String(20),unique=True,index=True)
+    provider: Mapped[str]=mapped_column(String(12))
+    country: Mapped[str]=mapped_column(String(2),index=True)
+    number_type: Mapped[str]=mapped_column(String(16),default='local')
+    status: Mapped[str]=mapped_column(String(16),default='available',index=True)
+    order_reference: Mapped[str]=mapped_column(String(32),default='')
+    reserved_until: Mapped[datetime | None]=mapped_column(DateTime(timezone=True),nullable=True)
+    created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=now)
+
+class ProvisioningJob(Base):
+    """Durable outbox; one provisioning request per verified paid order."""
+    __tablename__ = 'mkt_provisioning_jobs'
+    order_reference: Mapped[str] = mapped_column(String(32), primary_key=True)
+    status: Mapped[str] = mapped_column(String(20), default='pending', index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dialer_account_id: Mapped[str] = mapped_column(String(100), default='')
+    last_error: Mapped[str] = mapped_column(String(200), default='')
+
+class AddonEntitlementJob(Base):
+    """Outbox for verified paid CRM + Power Dialer purchases."""
+    __tablename__ = 'mkt_addon_entitlement_jobs'
+    order_reference: Mapped[str] = mapped_column(String(32), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(100))
+    paid_through: Mapped[date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(20), default='pending', index=True)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class DeferredStripeInvoice(Base):
+    """Signed, paid Stripe renewal invoices waiting for dialer provisioning."""
+    __tablename__ = 'mkt_deferred_stripe_invoices'
+    invoice_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    subscription_id: Mapped[str] = mapped_column(String(100), index=True)
+    order_reference: Mapped[str] = mapped_column(String(32), index=True)
+    invoice_payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(20), default='pending', index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class ChatConversation(Base):
     """One website-chat visitor or one WhatsApp number."""

@@ -1,5 +1,5 @@
 """Independent Dialnytics marketing app. Contains no telephony credentials or dialer writes."""
-import asyncio, contextlib, csv, io, json, logging, secrets, uuid, math, time, hmac
+import asyncio, contextlib, csv, io, json, logging, secrets, uuid, math, time, hmac, os
 from datetime import datetime, timedelta, timezone, date
 from urllib.parse import urlencode, urlparse
 from contextlib import asynccontextmanager
@@ -12,7 +12,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from sqlalchemy import select, update, delete, func, or_, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from .settings import Settings, ROOT
-from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket, Setting
+from .database import make_database, init_database, Submission, AdminSession, Note, MailJob, Audit, RateBucket, Setting, PhoneInventory
 from .security import now, sha, verify_password, form_token, valid_form_token, csv_safe
 from .catalog import BUSINESS, PLANS, FEATURES, EUROPE_COUNTRIES, price_quote, client_catalog, addon_view, PRICE_FIELDS, DEFAULT_PRICES, PRICES, clean_prices, apply_prices, price_view, usd
 from .content import PAGES, COLLECTIONS, PRODUCT_LINKS, SOLUTION_LINKS, FAQ, BLOG_POSTS, refresh_price_text
@@ -41,6 +41,9 @@ class RequestData(BaseModel):
     addons: list[str]=Field(default_factory=list,max_length=4)
     payment: str=Field(default='',max_length=30)
     number_preference: str=Field(default='',max_length=200)
+    number_country: str=Field(default='',max_length=2)
+    number_ids: list[str]=Field(default_factory=list,max_length=100)
+    dialer_password: str=Field(default='',max_length=128)
     preferred_date: str=Field(default='',max_length=40)
     preferred_time: str=Field(default='',max_length=40)
     timezone: str=Field(default='Asia/Karachi',max_length=80)
@@ -207,7 +210,7 @@ def create_app(settings=None):
              'product_links':PRODUCT_LINKS,'solution_links':SOLUTION_LINKS,
              'catalog':client_catalog(),'pricing':price_view(),'addons':addon_view(),'csrf':csrf,'year':now().year,
              'base_url':settings.base_url,'canonical':settings.base_url+request.url.path,
-             'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'card_checkout':settings.stripe_ready,'page_title':'Business calling, without the extra layers.',
+             'current_path':request.url.path,'chat_enabled':settings.chat_enabled,'card_checkout':settings.stripe_ready,'signup_enabled':bool(os.getenv('DIALNYTICS_SIGNUP_FERNET_KEY')),'page_title':'Business calling, without the extra layers.',
              'description':'Unlimited business calling, dedicated caller ID, CRM, Power Dialer and recording. Clear prices. A human setup process.',
              **(context or {})}
         response=templates.TemplateResponse(request=request,name=name,context=ctx,status_code=status)
@@ -330,10 +333,26 @@ def create_app(settings=None):
             raise HTTPException(422,'Please include at least 10 characters in your message.')
         details={}
         if data.kind=='order':
+            if data.dialer_password:
+                if not os.getenv('DIALNYTICS_SIGNUP_FERNET_KEY'):
+                    raise HTTPException(503,'Self-service registration is not configured.')
+                if len(data.dialer_password)<12:
+                    raise HTTPException(422,'Choose a password of at least 12 characters.')
             try: details=price_quote(data.plan,data.users,data.countries,data.addons)
             except ValueError as exc: raise HTTPException(422,str(exc))
             if data.payment not in ('bank','usdt','stripe'): raise HTTPException(422,'Choose a payment preference.')
             details.update(payment=data.payment,number_preference=data.number_preference)
+            if data.number_ids or data.number_country:
+                if os.getenv('DIALNYTICS_REQUIRE_OWNED_NUMBERS') != '1':
+                    raise HTTPException(422,'Owned number checkout is not enabled.')
+                from .checkout_inventory import validate_number_choice
+                try:
+                    validate_number_choice(data.number_country, data.number_ids, data.users)
+                except ValueError as exc:
+                    raise HTTPException(422,str(exc))
+                details.update(country=data.number_country,number_ids=data.number_ids,seats=data.users)
+            elif os.getenv('DIALNYTICS_REQUIRE_OWNED_NUMBERS') == '1':
+                raise HTTPException(422,'Select one owned number for each user before checkout.')
         if data.kind=='demo':
             if data.preferred_date:
                 try:
@@ -342,6 +361,8 @@ def create_app(settings=None):
             details.update(duration_minutes=15,preferred_date=data.preferred_date,preferred_time=data.preferred_time,timezone=data.timezone,confirmation='pending')
         if data.kind=='quote': details.update(plan=data.plan or 'custom',users=data.users)
         plain=data.model_dump(mode='json');plain.pop('idempotency_key');plain.pop('website')
+        # Password must never be stored in request JSON, audit logs, or payload hashes.
+        supplied_password=plain.pop('dialer_password', '')
         digest=sha(json.dumps(plain,sort_keys=True)); key=str(data.idempotency_key)
         def receipt(row):
             text_lines=[f'Hello Dialnytics, my {row.kind} request reference is {row.reference}.',f'Name: {row.name}']
@@ -353,7 +374,11 @@ def create_app(settings=None):
                 if row.details.get('taxes_included'): text_lines.append('Prices include taxes.')
             if row.kind=='demo': text_lines.append('Please confirm the timing of my 15-minute demo.')
             text_lines.append('Please confirm the next steps.');msg='\n'.join(text_lines)
-            out={'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
+            # Manual payments have a server-authoritative 60-minute approval deadline.
+            # This timestamp is informational; the approval endpoint enforces it.
+            created=aware(row.created_at)
+            deadline=(created+timedelta(minutes=60)).isoformat() if row.kind=='order' and row.details.get('payment') in ('bank','usdt') and row.status=='new' else None
+            out={'payment_deadline':deadline,'saved':True,'reference':row.reference,'kind':row.kind,'quote':row.details if row.kind=='order' else None,
                  'whatsapp_url':'https://wa.me/'+BUSINESS['whatsapp']+'?'+urlencode({'text':msg}),'whatsapp_message':msg}
             if row.kind=='order' and row.details.get('payment')=='stripe' and settings.stripe_ready and row.details.get('monthly_total') and row.status=='new':
                 try:
@@ -373,6 +398,18 @@ def create_app(settings=None):
         try:
             with DB.begin() as db:
                 db.add(row); db.flush()
+                if data.kind=='order' and data.number_ids:
+                    from .checkout_inventory import validate_inventory_ownership
+                    from .number_reservations import reserve_numbers, InventoryConflict
+                    try:
+                        validate_inventory_ownership(db,data.number_country,data.number_ids)
+                        reserve_numbers(db,row.reference,data.number_ids)
+                    except (ValueError,InventoryConflict) as exc:
+                        raise HTTPException(409,str(exc))
+                if data.kind=='order' and supplied_password:
+                    from .credential_vault import store_credentials
+                    store_credentials(db,os.environ['DIALNYTICS_SIGNUP_FERNET_KEY'],row.reference,
+                                      {'email':str(data.email).lower(),'password':supplied_password},ttl_minutes=120)
                 db.add(MailJob(id=str(uuid.uuid4()),submission_id=row.id))
         except IntegrityError:
             with DB() as db:
@@ -438,6 +475,101 @@ def create_app(settings=None):
             unread=db.scalar(select(func.count()).select_from(Submission).where(Submission.status=='new'))
             pending_mail=db.scalar(select(func.count()).select_from(MailJob).where(MailJob.status!='sent'))
         return render(request,'admin_inbox.html',{'page_title':'Marketing enquiries','admin':sess,'rows':rows,'stats':stats,'unread':unread,'count':count,'page':page,'pages':max(1,math.ceil(count/25)), 'kind':kind,'status':status,'q':q,'statuses':STATUSES,'kinds':ADMIN_KINDS,'mail_ready':settings.mail_ready,'pending_mail':pending_mail,'pager_query':urlencode({'kind':kind,'status':status,'q':q})})
+    @app.get('/admin/renewals', response_class=HTMLResponse)
+    def admin_renewals(request: Request):
+        sess = admin_session(request)
+        if not sess:
+            return RedirectResponse('/admin/login', status_code=303)
+        from .renewal_ledger import SubscriptionTerm, RenewalReceipt
+        from .renewal_sync import RenewalSyncJob
+        with DB() as db:
+            jobs = db.scalars(select(RenewalSyncJob).order_by(RenewalSyncJob.next_attempt.desc()).limit(100)).all()
+            terms = db.scalars(select(SubscriptionTerm).order_by(SubscriptionTerm.paid_through.desc()).limit(100)).all()
+            receipts = db.scalars(select(RenewalReceipt).order_by(RenewalReceipt.confirmed_at.desc()).limit(100)).all()
+            # Materialize rows while the session is open.
+            jobs_data = [{'account_id': j.account_id, 'status': j.status,
+                          'target': j.target_paid_through, 'attempts': j.attempts,
+                          'error': j.last_error} for j in jobs]
+            terms_data = [{'account_id': t.account_id, 'paid_through': t.paid_through,
+                           'renewals': t.renewal_count} for t in terms]
+            receipts_data = [{'payment_id': r.payment_id, 'account_id': r.account_id,
+                              'confirmed_at': r.confirmed_at} for r in receipts]
+        return render(request, 'admin_renewals.html', {'page_title': 'Subscription renewals',
+                      'admin': sess, 'jobs': jobs_data, 'terms': terms_data,
+                      'receipts': receipts_data})
+
+    @app.post('/admin/renewals/manual-approve')
+    def admin_approve_manual_renewal(request: Request,
+                                     order_reference: str = Form(...),
+                                     payment_reference: str = Form(...),
+                                     payment_method: str = Form(...),
+                                     verified: str = Form(''),
+                                     csrf: str = Form(...)):
+        # This is an admin assertion of external payment verification, NOT
+        # proof of payment from a customer. Never expose as a public route.
+        sess = admin_required(request, csrf)
+        from .manual_renewal import approve_manual_renewal, ManualRenewalError
+        try:
+            if verified != 'yes':
+                raise ManualRenewalError('Confirm independent payment verification first')
+            with DB.begin() as db:
+                paid_through, created = approve_manual_renewal(
+                    db, order_reference=order_reference.strip(),
+                    payment_reference=payment_reference.strip(),
+                    payment_method=payment_method, actor=sess.email,
+                    verified=True, confirmed_at=now())
+                audit(db, sess, 'manual renewal '+('approved' if created else 'duplicate'),
+                      order_reference.strip())
+        except (ManualRenewalError, ValueError) as exc:
+            return RedirectResponse('/admin/renewals?'+urlencode({'error':str(exc)}), status_code=303)
+        return RedirectResponse('/admin/renewals?'+urlencode({'saved':'1' if created else 'duplicate'}), status_code=303)
+
+    @app.get('/admin/manual-payments', response_class=HTMLResponse)
+    def admin_manual_payments(request: Request):
+        sess = admin_session(request)
+        if not sess: return RedirectResponse('/admin/login', status_code=303)
+        with DB() as db:
+            orders = db.scalars(select(Submission).where(Submission.kind == 'order',
+                Submission.status.in_(['new','expired','paid']))
+                .order_by(Submission.created_at.desc()).limit(300)).all()
+            data = [{'reference': o.reference, 'name': o.name, 'email': o.email,
+                     'status': o.status, 'created_at': o.created_at,
+                     'payment': (o.details or {}).get('payment'),
+                     'total': (o.details or {}).get('monthly_total'),
+                     'users': (o.details or {}).get('users')}
+                    for o in orders if (o.details or {}).get('payment') in ('bank','usdt')]
+        return render(request, 'admin_manual_payments.html', {'page_title':'Manual payments',
+            'admin':sess, 'orders':data, 'error':request.query_params.get('error',''),
+            'saved':request.query_params.get('saved','')})
+
+    @app.post('/admin/manual-payments/approve')
+    def admin_approve_manual_payment(request: Request, reference: str = Form(...), csrf: str = Form(...)):
+        sess = admin_required(request, csrf)
+        from .manual_payment_approval import approve_manual_order, ApprovalError
+        try:
+            with DB.begin() as db:
+                outcome = approve_manual_order(db, reference, actor=sess.email)
+                audit(db, sess, 'manual payment '+outcome, reference)
+        except ApprovalError as exc:
+            return RedirectResponse('/admin/manual-payments?'+urlencode({'error':str(exc)}), status_code=303)
+        return RedirectResponse('/admin/manual-payments?saved=1', status_code=303)
+
+    @app.get('/admin/provisioning',response_class=HTMLResponse)
+    def admin_provisioning(request:Request, status:str='', page:int=1):
+        sess=admin_session(request)
+        if not sess: return RedirectResponse('/admin/login',status_code=303)
+        from .database import ProvisioningJob
+        allowed={'pending','processing','retry','completed'}
+        if status and status not in allowed: raise HTTPException(422,'Invalid job status')
+        page=max(1,min(page,10000))
+        with DB() as db:
+            query=select(ProvisioningJob)
+            if status: query=query.where(ProvisioningJob.status==status)
+            jobs=db.scalars(query.order_by(ProvisioningJob.next_attempt.desc()).offset((page-1)*50).limit(50)).all()
+            counts=dict(db.execute(select(ProvisioningJob.status,func.count()).group_by(ProvisioningJob.status)).all())
+        return render(request,'admin_provisioning.html',{'page_title':'Account provisioning',
+                      'admin':sess,'jobs':jobs,'counts':counts,'selected_status':status,'page':page})
+
     @app.get('/admin/requests/{record_id}',response_class=HTMLResponse)
     def detail(request:Request,record_id:str):
         sess=admin_session(request)
@@ -492,69 +624,52 @@ def create_app(settings=None):
         for r in rows:
             writer.writerow([csv_safe(v) for v in [r.reference,r.kind,r.status,r.name,r.email,r.phone,r.company,aware(r.created_at).isoformat(),r.details.get('plan_name',''),r.details.get('users',''),r.details.get('monthly_total',''),r.details.get('payment',''),r.subject,r.message]])
         return Response('\ufeff'+out.getvalue(),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="dialnytics-enquiries.csv"'})
+    @app.get('/api/checkout/inventory-mode')
+    def checkout_inventory_mode():
+        return {'required':os.getenv('DIALNYTICS_REQUIRE_OWNED_NUMBERS')=='1'}
+
+    @app.get('/api/numbers/available')
+    def available_owned_numbers(country: str = 'US', number_type: str = 'local'):
+        if country not in ('US','CA','GB') or number_type not in ('local','toll_free'):
+            raise HTTPException(422,'Unsupported number filter')
+        with DB() as db:
+            rows=db.scalars(select(PhoneInventory).where(PhoneInventory.country==country,
+                PhoneInventory.number_type==number_type,PhoneInventory.status=='available')
+                .order_by(PhoneInventory.e164).limit(200)).all()
+            return {'numbers':[{'id':r.id,'number':r.e164,'country':r.country,'type':r.number_type} for r in rows]}
+
+    @app.get('/admin/numbers',response_class=HTMLResponse)
+    def admin_numbers(request:Request):
+        sess=admin_session(request)
+        if not sess: return RedirectResponse('/admin/login',status_code=303)
+        with DB() as db: rows=db.scalars(select(PhoneInventory).order_by(PhoneInventory.country,PhoneInventory.e164)).all()
+        return render(request,'admin_numbers.html',{'page_title':'Owned number inventory','admin':sess,'rows':rows})
+
+    @app.post('/admin/numbers')
+    def admin_number_add(request:Request,csrf:str=Form(...),number:str=Form(...),country:str=Form(...),
+                         provider:str=Form(...),number_type:str=Form('local')):
+        import re
+        sess=admin_session(request)
+        if not sess: raise HTTPException(403,'Admin required')
+        if not hmac.compare_digest(csrf,sess.csrf): raise HTTPException(403,'Invalid admin CSRF')
+        if not re.fullmatch(r'\+[1-9][0-9]{7,14}',number): raise HTTPException(422,'Use E.164 number')
+        if country not in ('US','CA','GB') or provider not in ('telnyx','twilio') or number_type not in ('local','toll_free'):
+            raise HTTPException(422,'Invalid number configuration')
+        if (country=='GB') != (provider=='twilio'):
+            raise HTTPException(422,'UK must use Twilio; US/CA must use Telnyx')
+        with DB.begin() as db:
+            if db.scalar(select(PhoneInventory.id).where(PhoneInventory.e164==number)):
+                raise HTTPException(409,'Number already exists')
+            db.add(PhoneInventory(id=str(uuid.uuid4()),e164=number,country=country,provider=provider,number_type=number_type))
+            audit(db,sess,'number added',number)
+        return RedirectResponse('/admin/numbers',status_code=303)
+
     @app.get('/admin/activity',response_class=HTMLResponse)
     def activity(request:Request):
         sess=admin_session(request)
         if not sess: return RedirectResponse('/admin/login',status_code=303)
         with DB() as db: rows=db.scalars(select(Audit).order_by(Audit.created_at.desc()).limit(200)).all()
         return render(request,'admin_activity.html',{'page_title':'Admin activity','admin':sess,'rows':rows,'mail_ready':settings.mail_ready})
-
-    @app.get('/admin/confirmed-orders', response_class=HTMLResponse)
-    def admin_confirmed_orders(request: Request, q: str = '', page: int = 1):
-        sess = admin_session(request)
-        if not sess:
-            return RedirectResponse('/admin/login', status_code=303)
-        q = q.strip()[:150]
-        page = max(1, min(page, 100000))
-        with DB() as db:
-            rows = db.scalars(select(Submission).where(
-                Submission.kind == 'order', Submission.status == 'paid'
-            ).order_by(Submission.updated_at.desc())).all()
-            confirmed = []
-            for row in rows:
-                details = row.details or {}
-                card = details.get('card_payment') or {}
-                # Only verified Stripe webhook records qualify, never manual status changes.
-                if not card.get('session') or not card.get('paid_at'):
-                    continue
-                if q and q.lower() not in ' '.join((row.reference, row.name, row.email,
-                          row.phone, str(details.get('plan_name', '')))).lower():
-                    continue
-                confirmed.append({'row': row, 'card': card, 'details': details})
-        count = len(confirmed)
-        pages = max(1, math.ceil(count / 25))
-        page = min(page, pages)
-        return render(request, 'admin_confirmed_orders.html', {
-            'page_title': 'Confirmed Orders', 'admin': sess,
-            'orders': confirmed[(page - 1) * 25:page * 25],
-            'count': count, 'page': page, 'pages': pages, 'q': q,
-            'pager_query': urlencode({'q': q}),
-        })
-
-    @app.get('/api/integrations/confirmed-orders')
-    def integration_confirmed_orders(request: Request):
-        """Read-only paid orders for the dialer admin. Never accepts payment claims."""
-        import os
-        token = os.getenv('DIALER_ORDERS_API_TOKEN', '').strip()
-        supplied = request.headers.get('authorization', '')
-        if len(token) < 32 or not hmac.compare_digest(supplied, 'Bearer ' + token):
-            raise HTTPException(401, 'Unauthorized')
-        with DB() as db:
-            rows = db.scalars(select(Submission).where(Submission.kind == 'order', Submission.status == 'paid').order_by(Submission.created_at.desc()).limit(500)).all()
-            orders = []
-            for row in rows:
-                details = row.details or {}
-                card = details.get('card_payment') or {}
-                if not card.get('session') or not card.get('paid_at'):
-                    continue  # manually marked paid orders are not Stripe-confirmed
-                orders.append({'reference': row.reference, 'name': row.name,
-                               'email': row.email, 'phone': row.phone,
-                               'plan': details.get('plan_name', ''), 'users': details.get('users', 1),
-                               'amount_usd': (card.get('amount_total') or 0) / 100,
-                               'paid_at': card['paid_at'], 'stripe_session': card['session'],
-                               'stripe_customer': card.get('customer', ''),
-                               'stripe_subscription': card.get('subscription', '')})
-        return JSONResponse({'orders': orders}, headers={'Cache-Control': 'no-store'})
 
     @app.post('/webhooks/stripe')
     async def stripe_webhook(request:Request):
@@ -565,15 +680,45 @@ def create_app(settings=None):
         obj=(event.get('data') or {}).get('object') or {}
         kind=event.get('type','')
         ref=obj.get('client_reference_id') or (obj.get('metadata') or {}).get('reference') or ''
+        if kind == 'invoice.paid':
+            from .stripe_renewals import process_paid_invoice
+            with DB.begin() as db:
+                outcome, order_ref = process_paid_invoice(db, obj)
+            # Pending renewals are durably stored and replayed by the worker.
+            log.info('Stripe recurring invoice outcome=%s order=%s', outcome, order_ref)
+            return {'received': True}
+        if kind in ('customer.subscription.deleted', 'invoice.payment_failed'):
+            from .subscription_events import apply_subscription_event
+            with DB.begin() as db:
+                outcome = apply_subscription_event(db, kind, obj, timestamp=now())
+            log.info('Stripe subscription lifecycle outcome=%s', outcome)
+            return {'received': True}
         if not ref: return {'received':True}
         with DB.begin() as db:
             row=db.scalar(select(Submission).where(Submission.reference==ref,Submission.kind=='order'))
             if not row: return {'received':True}
             details=dict(row.details or {}); card=dict(details.get('card_payment') or {})
-            if kind=='checkout.session.completed' and obj.get('payment_status') in ('paid','no_payment_required'):
-                card.update(session=obj.get('id'),subscription=obj.get('subscription'),customer=obj.get('customer'),amount_total=obj.get('amount_total'),currency=obj.get('currency','usd'),paid_at=now().isoformat(),status='active')
+            if kind in ('checkout.session.completed', 'checkout.session.async_payment_succeeded'):
+                # Checkout can complete before an asynchronous payment settles.
+                # Never grant paid status unless Stripe explicitly confirms payment.
+                if obj.get('payment_status') != 'paid':
+                    return {'received':True}
+                session_id=obj.get('id')
+                if card.get('status')=='active' and card.get('session')==session_id:
+                    return {'received':True}  # webhook retries must not duplicate paid notes
+                card.update(session=session_id,subscription=obj.get('subscription'),
+                            customer=obj.get('customer'),amount_total=obj.get('amount_total'),
+                            paid_at=now().isoformat(),status='active')
                 row.status='paid'
-                db.add(Note(submission_id=row.id,body='Card payment received through Stripe Checkout. Review the account, then activate.',author='Stripe'))
+                from .provisioning_queue import enqueue_paid_order
+                db.flush()
+                enqueue_paid_order(db, row.reference)
+                db.add(Note(submission_id=row.id,
+                    body='Stripe payment verified. Account provisioning still requires a separate secure workflow.',
+                    author='Stripe'))
+            elif kind=='checkout.session.async_payment_failed':
+                if row.status=='paid': return {'received':True}
+                card.update(status='payment_failed',failed_at=now().isoformat())
             elif kind=='customer.subscription.deleted':
                 card.update(status='cancelled',cancelled_at=now().isoformat())
                 db.add(Note(submission_id=row.id,body='Stripe subscription cancelled.',author='Stripe'))

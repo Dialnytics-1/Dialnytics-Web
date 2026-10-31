@@ -63,11 +63,20 @@ export async function copyText(text, button) {
     else { button.textContent='Select and copy the message above'; area.addEventListener('blur',()=>area.remove(),{once:true}); }
   }
 }
-// Add-ons are priced per user per month; SMS also has a one-time registration fee.
+// CRM + Power Dialer is billed once per customer account, not per seat.
+// Other add-ons retain their existing per-seat billing rules.
 export function addonQuote(catalog, keys, users) {
+  const seats = Number(users);
+  if (!Number.isInteger(seats) || seats < 1 || seats > 100) throw new Error('Invalid seat count');
   const list = (catalog.addons || []).filter(a => a.live && keys.includes(a.key));
-  const lines = list.map(a => ({ key: a.key, name: a.name, total: Math.round(Number(a.price) * 100) * users / 100 }));
-  const monthly = lines.reduce((sum, l) => sum + Math.round(l.total * 100), 0) / 100;
+  const lines = list.map(a => {
+    const accountWide = a.key === 'campaigns' || a.billing_scope === 'account';
+    const rate = accountWide && seats > 1 ? Number(a.team_price ?? a.price) : Number(a.price);
+    if (!Number.isFinite(rate) || rate < 0) throw new Error('Invalid add-on price');
+    const cents = Math.round(rate * 100) * (accountWide ? 1 : seats);
+    return {key:a.key, name:a.name, total:cents / 100};
+  });
+  const monthly = lines.reduce((sum, line) => sum + Math.round(line.total * 100), 0) / 100;
   const oneTime = keys.includes('sms') ? Number(catalog.sms_setup || 0) : 0;
-  return { lines, monthly, oneTime, keys: list.map(a => a.key) };
+  return {lines, monthly, oneTime, keys:list.map(a => a.key)};
 }

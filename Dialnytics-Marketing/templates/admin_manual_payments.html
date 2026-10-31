@@ -1,0 +1,10 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<h1>Bank / Crypto payments</h1>
+<p>Only approve after verifying receipt of funds in your bank or wallet. Orders expire 60 minutes after submission.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if saved %}<p role="status">Payment approval saved and provisioning queued.</p>{% endif %}
+<div style="overflow-x:auto"><table><thead><tr><th>Reference</th><th>Customer</th><th>Method</th><th>Users</th><th>USD</th><th>Created</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for o in orders %}<tr><td>{{ o.reference }}</td><td>{{ o.name }}<small>{{ o.email }}</small></td><td>{{ o.payment }}</td><td>{{ o.users }}</td><td>{{ o.total }}</td><td>{{ o.created_at|stamp }}</td><td>{{ o.status }}</td><td>{% if o.status == 'new' %}<form method="post" action="/admin/manual-payments/approve"><input type="hidden" name="csrf" value="{{ admin.csrf }}"><input type="hidden" name="reference" value="{{ o.reference }}"><button type="submit" class="button small">Confirm received payment</button></form>{% else %}—{% endif %}</td></tr>{% else %}<tr><td colspan="8">No manual payment orders.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

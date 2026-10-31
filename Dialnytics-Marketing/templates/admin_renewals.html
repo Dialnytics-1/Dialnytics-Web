@@ -1,0 +1,25 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<h1>Subscription renewals</h1><p>Verified Stripe renewal receipts and dialer synchronization status. Payment confirmation does not guarantee dialer synchronization.</p>
+<h2>Approve bank / crypto renewal</h2>
+<p>Only approve after checking the bank statement or blockchain settlement independently. This extends the existing account by 30 days and queues synchronization.</p>
+{% if request.query_params.get('error') %}<p role="alert">{{ request.query_params.get('error')|e }}</p>{% endif %}
+{% if request.query_params.get('saved') %}<p role="status">Renewal request processed: {{ request.query_params.get('saved')|e }}</p>{% endif %}
+<form method="post" action="/admin/renewals/manual-approve">
+<input type="hidden" name="csrf" value="{{ admin.csrf|e }}">
+<label>Original paid order reference <input name="order_reference" required maxlength="120"></label>
+<label>Verified bank transaction ID or crypto transaction hash <input name="payment_reference" required minlength="6" maxlength="180"></label>
+<label>Payment method <select name="payment_method"><option value="bank">Bank</option><option value="crypto">Crypto</option></select></label>
+<label><input type="checkbox" name="verified" value="yes" required> I independently verified cleared payment and the correct amount.</label>
+<button type="submit">Approve verified renewal</button>
+</form>
+<h2>Synchronization jobs</h2><div class="table-wrap"><table><thead><tr><th>Account</th><th>Status</th><th>Paid through</th><th>Attempts</th><th>Error type</th></tr></thead><tbody>
+{% for j in jobs %}<tr><td>{{ j.account_id|e }}</td><td>{{ j.status|e }}</td><td>{{ j.target|stamp }}</td><td>{{ j.attempts }}</td><td>{{ j.error|e }}</td></tr>{% else %}<tr><td colspan="5">No jobs</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Subscription terms</h2><div class="table-wrap"><table><thead><tr><th>Account</th><th>Paid through</th><th>Renewals</th></tr></thead><tbody>
+{% for t in terms %}<tr><td>{{ t.account_id|e }}</td><td>{{ t.paid_through|stamp }}</td><td>{{ t.renewals }}</td></tr>{% else %}<tr><td colspan="3">No terms</td></tr>{% endfor %}
+</tbody></table></div>
+<h2>Recent verified receipts</h2><div class="table-wrap"><table><thead><tr><th>Payment ID</th><th>Account</th><th>Confirmed</th></tr></thead><tbody>
+{% for r in receipts %}<tr><td>{{ r.payment_id|e }}</td><td>{{ r.account_id|e }}</td><td>{{ r.confirmed_at|stamp }}</td></tr>{% else %}<tr><td colspan="3">No receipts</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

@@ -39,7 +39,8 @@ def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan
               (f'{k}[price_data][product_data][name]', name),
               (f'{k}[price_data][tax_behavior]', 'inclusive')]
         if recurring:
-            p.append((f'{k}[price_data][recurring][interval]', 'month'))
+            p.extend([(f'{k}[price_data][recurring][interval]', 'day'),
+                      (f'{k}[price_data][recurring][interval_count]', '30')])
     return p
 
 

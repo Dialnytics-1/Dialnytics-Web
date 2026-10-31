@@ -1,0 +1,15 @@
+{% extends 'admin_base.html' %}
+{% block content %}
+<section class="admin-panel"><h1>Account provisioning</h1>
+<p>Verified paid orders and their dialer provisioning status. This page does not expose customer passwords.</p>
+<nav aria-label="Provisioning filters"><a href="/admin/provisioning">All</a>
+{% for kind in ['pending','processing','retry','completed'] %}
+<a href="/admin/provisioning?status={{ kind }}">{{ kind|capitalize }} ({{ counts.get(kind,0) }})</a>
+{% endfor %}</nav>
+<div style="overflow-x:auto"><table><thead><tr><th>Order reference</th><th>Status</th><th>Attempts</th><th>Next attempt</th><th>Dialer account</th><th>Last error code</th></tr></thead><tbody>
+{% for job in jobs %}<tr><td>{{ job.order_reference }}</td><td>{{ job.status }}</td><td>{{ job.attempts }}</td><td>{{ job.next_attempt or '—' }}</td><td>{{ job.dialer_account_id or '—' }}</td><td>{{ job.last_error or '—' }}</td></tr>
+{% else %}<tr><td colspan="6">No provisioning jobs found.</td></tr>{% endfor %}
+</tbody></table></div>
+{% if jobs|length == 50 %}<a href="/admin/provisioning?page={{ page+1 }}{% if selected_status %}&amp;status={{ selected_status }}{% endif %}">Next page</a>{% endif %}
+</section>
+{% endblock %}

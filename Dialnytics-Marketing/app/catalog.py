@@ -14,7 +14,6 @@ BUSINESS = {
 FEATURES = [
     ('calling', 'Unlimited Calling', 'No fixed monthly minute cap within the destinations included in your chosen plan.'),
     ('business-numbers', 'Dedicated Caller ID', 'A dedicated business number, with availability confirmed before activation.'),
-    ('crm', 'CRM Integration', 'Keep lead details, consent and follow-ups together.'),
     ('call-logs', 'Call Logs & Analytics', 'Review incoming and outgoing activity and talk time.'),
     ('incoming-calls', 'Incoming & Outgoing', 'Reach customers and receive calls through the browser dialer.'),
     ('sms', 'Voicemail', 'Callers can leave a message when you are away. Listen back in the dialer.'),
@@ -24,8 +23,8 @@ FEATURES = [
 ADDONS = [
     {'key': 'recording', 'name': 'Call recording', 'field': 'addon_recording', 'live': True, 'page': '/product/call-recording/',
      'note': 'Record calls and play them back or download them from the dialer.'},
-    {'key': 'campaigns', 'name': 'Campaigns & Power Dialer', 'field': 'addon_campaigns', 'live': True, 'page': '/product/campaigns/',
-     'note': 'Build lists from your CRM and let the dialer call them one after another.'},
+    {'key': 'campaigns', 'name': 'CRM + Power Dialer', 'field': 'addon_campaigns', 'live': True, 'page': '/product/campaigns/',
+     'note': 'Account-wide combined CRM and Power Dialer package: $10 for one seat or $20 for two or more seats per 30-day period.'},
     {'key': 'sms', 'name': 'SMS texting', 'field': 'addon_sms', 'live': True, 'page': '/product/sms/',
      'note': '300 texts per user each month from your business number. Needs A2P 10DLC registration (one-time fee).'},
     {'key': 'ai', 'name': 'AI call insights', 'field': 'addon_ai', 'live': True, 'page': '/product/ai-insights/',
@@ -66,7 +65,8 @@ PRICE_FIELDS = [
     ('eu_5', '5 destinations (per user / month)', 'UK to Europe', '159.85', '1', '5000'),
     ('eu_6', '6 destinations (per user / month)', 'UK to Europe', '178.52', '1', '5000'),
     ('addon_recording', 'Call recording (per user / month)', 'Add-ons', '5', '0', '1000'),
-    ('addon_campaigns', 'Campaigns & Power Dialer (per user / month)', 'Add-ons', '8', '0', '1000'),
+    ('addon_campaigns', 'CRM + Power Dialer (single account / 30 days)', 'Add-ons', '10', '0', '1000'),
+    ('addon_campaigns_team', 'CRM + Power Dialer (team account / 30 days)', 'Add-ons', '20', '0', '1000'),
     ('addon_sms', 'SMS texting (per user / month)', 'Add-ons', '8', '0', '1000'),
     ('addon_ai', 'AI call insights (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('sms_setup', 'SMS registration (one-time, per account)', 'Add-ons', '30', '0', '5000'),
@@ -115,14 +115,14 @@ def price_view() -> dict:
             'usa_3_total': usd(p['usa_per'] * 3), 'usa_5_total': usd(p['usa_per'] * 5),
             'uk': usd(p['uk']), 'australia': usd(p['australia']), 'japan': usd(p['japan']), 'global': usd(p['global']),
             'eu_1': usd(p['eu_1']),
-            'addon_recording': usd(p['addon_recording']), 'addon_campaigns': usd(p['addon_campaigns']),
+            'addon_recording': usd(p['addon_recording']), 'addon_campaigns': usd(p['addon_campaigns']), 'addon_campaigns_team': usd(p['addon_campaigns_team']),
             'addon_sms': usd(p['addon_sms']), 'addon_ai': usd(p['addon_ai']), 'sms_setup': usd(p['sms_setup']),
             'from': usd(min(p['usa_per'], p['uk'], p['australia'], p['japan'], p['global'])),
             'sms_texts': SMS_TEXTS_PER_USER}
 
 def addon_view() -> list:
     """Add-ons with their current price, for templates."""
-    return [{**a, 'price': usd(PRICES[a['field']])} for a in ADDONS]
+    return [{**a, 'price': usd(PRICES[a['field']]), 'team_price': usd(PRICES['addon_campaigns_team']) if a['key'] == 'campaigns' else None, 'billing_scope': 'account' if a['key'] == 'campaigns' else 'seat'} for a in ADDONS]
 
 def price_quote(plan: str, seats: int, countries: list[str] | None = None, addons: list[str] | None = None) -> dict:
     if plan not in PLANS:
@@ -151,9 +151,9 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
     else:
         total = Decimal(PLANS[plan]['price']) * seats
     by_key = {a['key']: a for a in ADDONS}
-    lines = [{'key': k, 'name': by_key[k]['name'], 'per_user': f"{PRICES[by_key[k]['field']]:.2f}",
-              'total': f"{PRICES[by_key[k]['field']] * seats:.2f}"} for k in addons]
-    addons_total = sum((PRICES[by_key[k]['field']] * seats for k in addons), Decimal('0'))
+    lines = [{'key': k, 'name': by_key[k]['name'], 'per_user': f"{(PRICES['addon_campaigns_team'] if seats > 1 else PRICES['addon_campaigns']) if k == 'campaigns' else PRICES[by_key[k]['field']]:.2f}",
+              'total': f"{(PRICES['addon_campaigns_team'] if seats > 1 else PRICES['addon_campaigns']) if k == 'campaigns' else PRICES[by_key[k]['field']] * seats:.2f}"} for k in addons]
+    addons_total = sum(((PRICES['addon_campaigns_team'] if seats > 1 else PRICES['addon_campaigns']) if k == 'campaigns' else PRICES[by_key[k]['field']] * seats for k in addons), Decimal('0'))
     one_time = PRICES['sms_setup'] if 'sms' in addons else Decimal('0')
     monthly = total + addons_total if total is not None else None
     return {'plan': plan, 'plan_name': PLANS[plan]['name'], 'users': seats,
@@ -170,5 +170,5 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
 def client_catalog() -> dict:
     return {'version': CATALOG_VERSION, 'plans': PLANS, 'europe_totals': {str(k): str(v) for k,v in EUROPE_TOTALS.items()}, 'countries': EUROPE_COUNTRIES,
             'usa': {'one': str(PRICES['usa_1']), 'two': str(PRICES['usa_2']), 'per': str(PRICES['usa_per'])},
-            'addons': [{'key': a['key'], 'name': a['name'], 'price': str(PRICES[a['field']]), 'live': a['live'], 'note': a['note']} for a in ADDONS],
+            'addons': [{'key': a['key'], 'name': a['name'], 'price': str(PRICES[a['field']]), 'team_price': str(PRICES['addon_campaigns_team']) if a['key'] == 'campaigns' else None, 'billing_scope': 'account' if a['key'] == 'campaigns' else 'seat', 'live': a['live'], 'note': a['note']} for a in ADDONS],
             'sms_setup': str(PRICES['sms_setup'])}
