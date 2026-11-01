@@ -695,6 +695,20 @@ def create_app(settings=None):
         for r in rows:
             writer.writerow([csv_safe(v) for v in [r.reference,r.kind,r.status,r.name,r.email,r.phone,r.company,aware(r.created_at).isoformat(),r.details.get('plan_name',''),r.details.get('users',''),r.details.get('monthly_total',''),r.details.get('payment',''),r.subject,r.message]])
         return Response('\ufeff'+out.getvalue(),media_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="dialnytics-enquiries.csv"'})
+    @app.get('/admin/orders',response_class=HTMLResponse)
+    def confirmed_orders(request:Request,q:str=''):
+        """Orders whose payment is confirmed (status Paid)."""
+        sess=admin_session(request)
+        if not sess: return RedirectResponse('/admin/login',status_code=303)
+        qry=select(Submission).where(Submission.kind=='order',Submission.status=='paid')
+        q=q.strip()[:80]
+        if q:
+            like='%'+q.replace('\\','').replace('%','').replace('_','')+'%'
+            qry=qry.where(or_(Submission.reference.ilike(like),Submission.name.ilike(like),Submission.email.ilike(like),Submission.company.ilike(like),Submission.phone.ilike(like)))
+        with DB() as db: rows=db.scalars(qry.order_by(Submission.created_at.desc()).limit(300)).all()
+        total=sum(float((r.details or {}).get('first_payment') or 0) for r in rows)
+        return render(request,'admin_orders.html',{'page_title':'Confirmed orders','admin':sess,'rows':rows,'q':q,'total':total})
+
     @app.get('/admin/activity',response_class=HTMLResponse)
     def activity(request:Request):
         sess=admin_session(request)
