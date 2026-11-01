@@ -110,7 +110,7 @@ def knowledge(base_url: str) -> str:
         f"CONTACT: WhatsApp {BUSINESS['phone_display']}, email {BUSINESS['email']}. Operated by "
         f"{BUSINESS['legal_name']} (UK company {BUSINESS['company_number']}). Registered office: {BUSINESS['address']} "
         "(registered office only, not a walk-in support location; support is online via WhatsApp/email).",
-        'REFUNDS: final written refund/cancellation terms are provided by the team before payment; do not promise refunds.',
+        'REFUNDS: all payments are final. No refunds ever once paid, plans cannot be changed or refunded, all calls are recorded, and accounts used for illegal or scam calls are terminated with no refund. Card plans renew monthly; cancel before the renewal date.',
         'VOICEMAIL is included. SMS texting is a live paid add-on (texting needs A2P 10DLC business registration, one-time fee). '
         'Also in the dialer: live captions, floating phone (Chrome/Edge), custom fields, search everything and a Customer Admin Portal for team owners. '
         

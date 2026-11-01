@@ -65,13 +65,18 @@ export async function copyText(text, button) {
 }
 // Add-ons are priced per user per month. One-time charges: the SMS registration (per account) and the
 // toll-free number (per DISTINCT number; `numberCount` defaults to one per user until numbers are picked).
-export function addonQuote(catalog, keys, users, numberCount = users) {
-  const list = (catalog.addons || []).filter(a => a.live && keys.includes(a.key));
+export function addonQuote(catalog, keys, users, numberCount = users, smsPacks = 0) {
+  const packs = Math.max(0, Math.min(100, Math.floor(Number(smsPacks) || 0)));
+  const list = (catalog.addons || []).filter(a => a.live && keys.includes(a.key) && a.key !== 'sms100');
   const monthlyList = list.filter(a => !a.one_time);
   const lines = monthlyList.map(a => ({ key: a.key, name: a.name, total: Math.round(Number(a.price) * 100) * users / 100 }));
   const monthly = lines.reduce((sum, l) => sum + Math.round(l.total * 100), 0) / 100;
   const sms = keys.includes('sms') ? Number(catalog.sms_setup || 0) : 0;
   const tollFree = keys.includes('tollfree') ? Math.round(Number(catalog.toll_free || 0) * 100) * numberCount / 100 : 0;
-  return { lines, monthly, oneTime: Math.round((sms + tollFree) * 100) / 100, sms, tollFree, keys: list.map(a => a.key),
-           names: list.map(a => a.name) };
+  const pack = (catalog.addons || []).find(a => a.key === 'sms100');
+  const packTotal = packs && pack && pack.live ? Math.round(Number(pack.price) * 100) * packs / 100 : 0;
+  const keysOut = list.map(a => a.key), namesOut = list.map(a => a.name);
+  if (packTotal) { keysOut.push('sms100'); namesOut.push('SMS 100 pack x' + packs + ' (' + packs * 100 + ' texts)'); }
+  return { lines, monthly, oneTime: Math.round((sms + tollFree + packTotal) * 100) / 100, sms, tollFree, packTotal, packs, keys: keysOut,
+           names: namesOut };
 }

@@ -65,7 +65,8 @@ class RequestData(BaseModel):
     plan: str=Field(default='',max_length=40)
     users: int=Field(default=1,ge=1,le=100,strict=True)
     countries: list[str]=Field(default_factory=list,max_length=6)
-    addons: list[str]=Field(default_factory=list,max_length=5)
+    addons: list[str]=Field(default_factory=list,max_length=6)
+    sms_packs: int=Field(default=0,ge=0,le=100,strict=True)
     team: list[TeamMember]=Field(default_factory=list,max_length=100)
     hold_token: str=Field(default='',max_length=64)
     payment: str=Field(default='',max_length=30)
@@ -449,7 +450,7 @@ def create_app(settings=None):
         details={}; provision=False
         if data.kind=='order':
             numbers=[m.number.strip() for m in data.team if m.number.strip()]
-            try: details=price_quote(data.plan,data.users,data.countries,data.addons,numbers)
+            try: details=price_quote(data.plan,data.users,data.countries,data.addons,numbers,data.sms_packs)
             except ValueError as exc: raise HTTPException(422,str(exc))
             if data.payment not in ('bank','usdt','stripe'): raise HTTPException(422,'Choose a payment preference.')
             details.update(payment=data.payment)
@@ -483,6 +484,7 @@ def create_app(settings=None):
                 if d.get('countries'): text_lines.append('Destinations: '+', '.join(d['countries']))
                 if d.get('addons'): text_lines.append('Add-ons: '+', '.join(a['name'] for a in d['addons']))
                 if d.get('sms_setup_total') not in (None,'0.00'): text_lines.append('One-time SMS registration: $'+d['sms_setup_total']+' USD')
+                if d.get('sms_packs'): text_lines.append(f"SMS 100 pack x{d['sms_packs']} ({d['sms_messages']} messages): $"+d['sms_pack_total']+' USD one-time')
                 if d.get('toll_free_total') not in (None,'0.00'): text_lines.append(f"Toll-free numbers x{d.get('toll_free_count')}: $"+d['toll_free_total']+' USD one-time')
                 if d.get('team'):
                     picked=sorted({t['number'] for t in d['team'] if t['number']})
@@ -520,7 +522,7 @@ def create_app(settings=None):
             try:
                 made=dialer.create_order({'ref':reference,'token':(data.hold_token or key)[:64],'payment_method':data.payment,'plan_slug':data.plan,
                     'plan_name':'1 USER ACCOUNT-'+PLANS[data.plan]['short'].replace(' ',''),'company_name':data.company,'whatsapp':data.phone,
-                    'addons':details['addon_keys'],'toll_free':'tollfree' in details['addon_keys'],'amount_usd':float(details['first_payment']),
+                    'addons':details['addon_keys'],'toll_free':'tollfree' in details['addon_keys'],'sms_packs':details.get('sms_packs',0),'amount_usd':float(details['first_payment']),
                     'hold_minutes':minutes,'members':[{'name':m.name,'email':str(m.email).lower(),'password':m.password,'number':m.number.strip()} for m in data.team]})
             except DialerError as exc:
                 if exc.detail.startswith('UNAVAILABLE:'):

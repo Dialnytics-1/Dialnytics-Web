@@ -29,6 +29,9 @@ ADDONS = [
      'note': 'Power Dialer, campaigns, CRM and follow-ups: build lists and let the dialer call them one after another.'},
     {'key': 'sms', 'name': 'SMS texting', 'field': 'addon_sms', 'live': True, 'page': '/product/sms/',
      'note': '300 texts per user each month from your business number. Needs A2P 10DLC registration (one-time fee).'},
+    # One-time purchase, bought in packs of 100 messages (quantity stepper on the order page).
+    {'key': 'sms100', 'name': 'SMS 100 pack', 'field': 'addon_sms100', 'live': True, 'one_time': True, 'qty': True, 'page': '/product/sms/',
+     'note': '100 text messages per pack, added to your account automatically. Buy as many packs as you need.'},
     {'key': 'ai', 'name': 'AI call insights', 'field': 'addon_ai', 'live': True, 'page': '/product/ai-insights/',
      'note': 'Summary, transcript and coaching tips after each call.'},
     # One-time charge per number (not per user, not monthly). USA & Canada only.
@@ -73,6 +76,7 @@ PRICE_FIELDS = [
     ('addon_recording', 'Call recording (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('addon_campaigns', 'Campaigns & Power Dialer (per user / month)', 'Add-ons', '8', '0', '1000'),
     ('addon_sms', 'SMS texting (per user / month)', 'Add-ons', '8', '0', '1000'),
+    ('addon_sms100', 'SMS 100 pack (one-time, per pack of 100 messages)', 'Add-ons', '5', '0', '1000'),
     ('addon_ai', 'AI call insights (per user / month)', 'Add-ons', '5', '0', '1000'),
     ('sms_setup', 'SMS registration (one-time, per account)', 'Add-ons', '30', '0', '5000'),
     ('toll_free', 'Toll-free number (one-time, per number)', 'Add-ons', '10', '0', '1000'),
@@ -122,14 +126,14 @@ def price_view() -> dict:
             'uk': usd(p['uk']), 'australia': usd(p['australia']), 'japan': usd(p['japan']), 'global': usd(p['global']),
             'eu_1': usd(p['eu_1']),
             'addon_recording': usd(p['addon_recording']), 'addon_campaigns': usd(p['addon_campaigns']),
-            'addon_sms': usd(p['addon_sms']), 'addon_ai': usd(p['addon_ai']), 'sms_setup': usd(p['sms_setup']),
+            'addon_sms': usd(p['addon_sms']), 'addon_sms100': usd(p['addon_sms100']), 'addon_ai': usd(p['addon_ai']), 'sms_setup': usd(p['sms_setup']),
             'toll_free': usd(p['toll_free']),
             'from': usd(min(p['usa_per'], p['uk'], p['australia'], p['japan'], p['global'])),
             'sms_texts': SMS_TEXTS_PER_USER}
 
 def addon_view() -> list:
     """Add-ons with their current price, for templates."""
-    return [{**a, 'price': usd(PRICES[a['field']]), 'one_time': bool(a.get('one_time')), 'regions': a.get('regions', [])} for a in ADDONS]
+    return [{**a, 'price': usd(PRICES[a['field']]), 'one_time': bool(a.get('one_time')), 'qty': bool(a.get('qty')), 'regions': a.get('regions', [])} for a in ADDONS]
 
 TOLL_FREE_RE = re.compile(r'^\+(1(800|833|844|855|866|877|888)|44(800|808))')
 NUMBER_RE = re.compile(r'^\+[1-9][0-9]{7,14}$')
@@ -138,7 +142,7 @@ def is_toll_free(number: str) -> bool:
     return bool(TOLL_FREE_RE.match(number or ''))
 
 def price_quote(plan: str, seats: int, countries: list[str] | None = None, addons: list[str] | None = None,
-                numbers: list[str] | None = None) -> dict:
+                numbers: list[str] | None = None, sms_packs: int = 0) -> dict:
     """`numbers` = the numbers the buyer picked (one per user; users may share one). Toll-free is charged
     once per DISTINCT toll-free number. Before numbers are picked the quote assumes one per user."""
     if plan not in PLANS:
@@ -157,6 +161,14 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
         raise ValueError('AI insights is coming soon and cannot be ordered yet.')
     if 'tollfree' in addons and plan not in next(a for a in ADDONS if a['key'] == 'tollfree')['regions']:
         raise ValueError('Toll-free numbers are available for the USA & Canada plan only.')
+    if isinstance(sms_packs, bool) or not isinstance(sms_packs, int) or not 0 <= sms_packs <= 100:
+        raise ValueError('Choose 0 to 100 SMS packs.')
+    if 'sms100' in addons and sms_packs == 0:
+        sms_packs = 1
+    if sms_packs > 0 and 'sms100' not in addons:
+        addons.append('sms100')
+    if sms_packs == 0 and 'sms100' in addons:
+        addons.remove('sms100')
     addons = [k for k in ADDON_KEYS if k in addons]  # stable order
     if plan == 'uk-to-europe':
         if not 1 <= len(countries) <= 6 or len(set(countries)) != len(countries):
@@ -181,7 +193,8 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
         picked = {n for n in (numbers or []) if n}
         tf_count = len({n for n in picked if is_toll_free(n)}) if picked else seats
     tf_total = PRICES['toll_free'] * tf_count
-    one_time = sms_setup + tf_total
+    pack_total = PRICES['addon_sms100'] * sms_packs
+    one_time = sms_setup + tf_total + pack_total
     monthly = total + addons_total if total is not None else None
     return {'plan': plan, 'plan_name': PLANS[plan]['name'], 'users': seats,
             'countries': countries if plan == 'uk-to-europe' else [],
@@ -192,6 +205,8 @@ def price_quote(plan: str, seats: int, countries: list[str] | None = None, addon
             'monthly_total': f'{monthly:.2f}' if monthly is not None else None,
             'sms_setup_total': f'{sms_setup:.2f}',
             'toll_free_count': tf_count, 'toll_free_each': f"{PRICES['toll_free']:.2f}", 'toll_free_total': f'{tf_total:.2f}',
+            'sms_packs': sms_packs, 'sms_pack_each': f"{PRICES['addon_sms100']:.2f}", 'sms_pack_total': f'{pack_total:.2f}',
+            'sms_messages': sms_packs * 100,
             'one_time_total': f'{one_time:.2f}',
             'first_payment': f'{monthly + one_time:.2f}' if monthly is not None else None,
             'setup_fee': '0.00', 'extra_charges': '0.00', 'taxes_included': True, 'currency': 'USD',

@@ -1,4 +1,4 @@
-import { getQuote, addonQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js?v=4';
+import { getQuote, addonQuote, money, quantity, newKey, submitRequest, copyText } from './shared.js?v=5';
 const catalog = JSON.parse(document.getElementById('pricing-data').textContent);
 const root = document.getElementById('order-app');
 const form = document.getElementById('order-form');
@@ -27,7 +27,14 @@ users.value = Number.isInteger(requestedUsers) ? String(requestedUsers) : '1';
 const addonBoxes = Array.from(form.querySelectorAll('[name="addon"]'));
 const requestedAddons = (params.get('addons') || '').split(',');
 addonBoxes.forEach(box => { if (!box.disabled && requestedAddons.includes(box.value)) box.checked = true; });
+const smsInput = document.getElementById('order-sms-packs');
+const smsPacks = () => { if (!smsInput) return 0; const v = Math.max(0, Math.min(100, Math.floor(Number(smsInput.value) || 0))); smsInput.value = String(v); return v; };
 const selectedAddons = () => addonBoxes.filter(box => box.checked && !box.disabled).map(box => box.value);
+if (smsInput) {
+  document.getElementById('minus-sms').addEventListener('click', () => { smsInput.value = String(smsPacks() - 1); update(); });
+  document.getElementById('plus-sms').addEventListener('click', () => { smsInput.value = String(smsPacks() + 1); update(); });
+  smsInput.addEventListener('input', () => update());
+}
 const selectedCountries = () => Array.from(form.querySelectorAll('[name="europe_country"]:checked')).map(input=>input.value);
 function showError(text) { error.textContent=text; error.hidden=!text; }
 function update() {
@@ -41,7 +48,7 @@ function update() {
   const tfBox = addonBoxes.find(b => b.value === 'tollfree');
   if (tfBox) { const ok = plan.value === 'usa-canada'; tfBox.disabled = !ok; if (!ok) tfBox.checked = false; tfBox.closest('label').hidden = !ok; }
   const distinct = new Set(picks.filter(Boolean)).size;
-  const extras = addonQuote(catalog, selectedAddons(), n, distinct || n);
+  const extras = addonQuote(catalog, selectedAddons(), n, distinct || n, smsPacks());
   document.getElementById('summary-addons').textContent=money(extras.monthly);
   document.getElementById('summary-onetime-row').hidden=!extras.oneTime;
   const smsNote=document.querySelector('[data-sms-note]'); if(smsNote) smsNote.hidden=!extras.keys.includes('sms');
@@ -131,7 +138,7 @@ function validateCurrent() {
 }
 function review() {
   const list = document.getElementById('review-details'); list.replaceChildren();
-  const rows=[['WhatsApp',form.elements.phone.value],['Business',form.elements.company.value || '-'],['Add-ons',addonQuote(catalog,selectedAddons(),1).names.join(', ') || 'None']];
+  const rows=[['WhatsApp',form.elements.phone.value],['Business',form.elements.company.value || '-'],['Add-ons',addonQuote(catalog,selectedAddons(),1,1,smsPacks()).names.join(', ') || 'None']];
   if (isQuotePlan()) rows.unshift(['Name',form.elements.name.value],['Email',form.elements.email.value]);
   else [...teamList.querySelectorAll('.team-member')].reverse().forEach((c,idx,arr)=>rows.unshift(['User '+(arr.length-idx)+' ('+c.querySelector('[data-field=name]').value+')',c.querySelector('[data-field=email]').value+' · '+(c.querySelector('[data-field=number]').value?fmt(c.querySelector('[data-field=number]').value):'no number')]));
   for (const [label,value] of rows) {
@@ -169,7 +176,7 @@ form.addEventListener('submit',async event=>{
   if(!document.getElementById('order-consent').reportValidity())return;
   const fields=new FormData(form);
   const team=isQuotePlan()?[]:[...teamList.querySelectorAll('.team-member')].map(c=>({name:c.querySelector('[data-field=name]').value.trim(),email:c.querySelector('[data-field=email]').value.trim(),password:c.querySelector('[data-field=password]').value,number:c.querySelector('[data-field=number]').value}));
-  const payload={kind:'order',name:isQuotePlan()?String(fields.get('name')).trim():team[0].name,email:isQuotePlan()?String(fields.get('email')).trim():team[0].email,phone:String(fields.get('phone')).trim(),company:String(fields.get('company')||''),message:String(fields.get('message')||''),plan:plan.value,users:quantity(users),countries:plan.value==='uk-to-europe'?selectedCountries():[],addons:selectedAddons(),team,hold_token:key,payment:String(fields.get('payment')||''),consent:true,website:String(fields.get('website')||''),idempotency_key:key};
+  const payload={kind:'order',name:isQuotePlan()?String(fields.get('name')).trim():team[0].name,email:isQuotePlan()?String(fields.get('email')).trim():team[0].email,phone:String(fields.get('phone')).trim(),company:String(fields.get('company')||''),message:String(fields.get('message')||''),plan:plan.value,users:quantity(users),countries:plan.value==='uk-to-europe'?selectedCountries():[],addons:selectedAddons(),sms_packs:smsPacks(),team,hold_token:key,payment:String(fields.get('payment')||''),consent:true,website:String(fields.get('website')||''),idempotency_key:key};
   busy=true;submit.disabled=true;back.disabled=true;submit.textContent='Saving your enquiry...';showError('');
   try{
     const data=await submitRequest(payload);saved=true;message=data.whatsapp_message;

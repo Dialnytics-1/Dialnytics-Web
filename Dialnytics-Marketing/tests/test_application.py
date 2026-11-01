@@ -319,6 +319,25 @@ def test_addons_quote_and_order(client,app,monkeypatch):
     p['idempotency_key']=str(uuid.uuid4());p['addons']=['bogus']
     assert submit(client,p).status_code==422
 
+def test_sms_packs_quote_and_order(client,app,monkeypatch):
+    FakeDialer.install(monkeypatch)
+    from app.catalog import price_quote
+    q=price_quote('uk',1,addons=[],sms_packs=3)
+    assert q['sms_packs']==3 and q['sms_messages']==300 and q['sms_pack_total']=='15.00'
+    assert 'sms100' in q['addon_keys'] and q['one_time_total']=='15.00' and q['first_payment']=='44.00'
+    assert price_quote('uk',1,addons=['sms100'])['sms_packs']==1
+    assert price_quote('uk',1)['sms_packs']==0
+    with pytest.raises(ValueError): price_quote('uk',1,sms_packs=101)
+    p=request_payload();p.update(kind='order',phone='+447700900123',plan='uk',users=1,payment='bank',sms_packs=2,team=team(1))
+    r=submit(client,p);assert r.status_code==200,r.text
+    assert 'SMS 100 pack x2 (200 messages)' in r.json()['whatsapp_message']
+
+def test_refund_policy_is_published(client):
+    page=client.get('/legal/billing-refund-cancellation/').text
+    assert 'All payments are final' in page and 'No refunds' in page
+    terms=client.get('/legal/terms/').text
+    assert 'all calls made or received through Dialnytics are recorded' in terms and 'terminated' in terms
+
 def test_home_sections(client):
     t=client.get('/').text
     for needle in ['data-calculator','Taxes included','A2P 10DLC','What happens to your request','Why we built'.upper(),'Watch product tour','Book a demo','newsletter-form','wa-fab','/static/img/product/crm.webp','data-sms-note']:

@@ -22,6 +22,8 @@ def checkout_params(quote: dict, reference: str, email: str, base_url: str, plan
     items += [(f"{a['name']} add-on ({users} user{'s' if users != 1 else ''})", a['total'], True) for a in quote.get('addons', [])]
     if Decimal(quote.get('sms_setup_total') or '0') > 0:
         items.append(('SMS A2P 10DLC registration (one-time)', quote['sms_setup_total'], False))
+    if Decimal(quote.get('sms_pack_total') or '0') > 0:
+        items.append((f"SMS 100 pack x{quote.get('sms_packs', 1)} ({quote.get('sms_messages', 100)} messages, one-time)", quote['sms_pack_total'], False))
     if Decimal(quote.get('toll_free_total') or '0') > 0:
         n = quote.get('toll_free_count', 1)
         items.append((f"Toll-free number x{n} (one-time)", quote['toll_free_total'], False))
