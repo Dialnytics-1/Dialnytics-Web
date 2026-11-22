@@ -1,21 +1,18 @@
 {# Animated replica of the real Dialnytics dialer (dashboard + calling rail). Demo data only. Driven by /static/js/hero-dialer.js #}
-<div class="dx-frame" data-hero-dialer aria-label="Illustrative Dialnytics dialer interface with demo data" role="img">
+<div class="dx-frame" data-hero-dialer aria-label="Interactive demo of the Dialnytics dialer with example data" role="group">
   <div class="dx-glow" aria-hidden="true"></div>
-  <div class="dx-browser" aria-hidden="true">
-    <div class="dx-chrome"><i></i><i></i><i></i><span class="dx-url"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>dialnytics.co.uk/dashboard</span><span class="dx-live"><b></b>Live preview</span></div>
+  <div class="dx-browser">
+    <div class="dx-chrome"><i></i><i></i><i></i><span class="dx-url"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>dialnytics.co.uk/dashboard</span><span class="dx-live"><b></b>Interactive demo</span></div>
     <div class="dx-viewport"><div class="dx-canvas">
       <div class="dx-top">
         <div class="dx-brand"><span class="dx-mark">D</span>Dialnytics</div>
-        <div class="dx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>Search contacts, call logs, campaigns, scripts...</div>
+        <label class="dx-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg><input type="text" data-dx-search placeholder="Search contacts, call logs, campaigns, scripts..." aria-label="Search the demo contacts" autocomplete="off" maxlength="30"></label>
         <div class="dx-top-actions"><span class="dx-ico">&#9728;</span><span class="dx-ico">?</span><span class="dx-avatar">S</span></div>
       </div>
       <div class="dx-body">
-        <nav class="dx-side">
-          <span class="on"><i>&#9638;</i>Dashboard</span><span><i>&#9742;</i>Call Logs</span><span><i>&#9679;</i>Recordings</span><span><i>&#9787;</i>Contacts</span><span><i>&#9636;</i>CRM</span><span><i>&#9889;</i>Power Dialer</span><span><i>&#9993;</i>Campaigns</span><span><i>&#9873;</i>Follow-ups</span><span><i>&#9998;</i>Script</span><span><i>&#9645;</i>Billing</span>
-          <span class="dx-side-bottom"><i>&#9881;</i>Settings</span>
-        </nav>
+        <nav class="dx-side" aria-label="Demo dialer menu"><span class="on" data-dx-nav="dash"><i>&#9638;</i>Dashboard</span><span data-dx-nav="logs"><i>&#9742;</i>Call Logs</span><span data-dx-nav="rec"><i>&#9679;</i>Recordings</span><span data-dx-nav="contacts"><i>&#9787;</i>Contacts</span><span data-dx-nav="crm"><i>&#9636;</i>CRM</span><span data-dx-nav="power"><i>&#9889;</i>Power Dialer</span><span data-dx-nav="camp"><i>&#9993;</i>Campaigns</span><span data-dx-nav="follow"><i>&#9873;</i>Follow-ups</span><span data-dx-nav="script"><i>&#9998;</i>Script</span><span data-dx-nav="billing"><i>&#9645;</i>Billing</span><span class="dx-side-bottom" data-dx-nav="settings"><i>&#9881;</i>Settings</span></nav>
         <div class="dx-main">
-          <div class="dx-head"><h4>Dashboard</h4><div class="dx-pills"><span class="on" data-dx-range="0">Today</span><span data-dx-range="1">This Week</span><span data-dx-range="2">This Month</span></div></div>
+          <div class="dx-view on" data-dx-view="dash"><div class="dx-head"><h4>Dashboard</h4><div class="dx-pills"><span class="on" data-dx-range="0">Today</span><span data-dx-range="1">This Week</span><span data-dx-range="2">This Month</span></div></div>
           <div class="dx-stats">
             <div class="dx-stat"><em class="c1">&#9742;</em><strong data-dx-stat="calls">124</strong><small>Total Calls</small></div>
             <div class="dx-stat"><em class="c2">&#10003;</em><strong data-dx-stat="rate">82%</strong><small>Answer Rate</small></div>
@@ -35,27 +32,27 @@
             <div class="dx-card"><h5>Disposition Breakdown</h5><div class="dx-line"><span><i class="p"></i>Interested</span><span>41 &middot; 33%</span></div><div class="dx-track"><b class="p" style="--w:33%"></b></div></div>
             <div class="dx-card"><h5>Ways to Improve</h5><p class="dx-tip"><strong>You're on track</strong>Nothing stands out for this period. Keep the calls consistent.</p></div>
           </div>
-        </div>
+        </div><div class="dx-view" data-dx-view="other" hidden></div></div>
         <aside class="dx-rail">
           <div class="dx-num"><small>Your number</small><strong>+1 202 555 0148</strong></div>
           <div class="dx-status" data-dx-status>Ready</div>
           <div class="dx-pad-view">
             <div class="dx-input"><span data-dx-input>Enter or paste a number</span></div>
             <div class="dx-keys">{% for k in ['1','2','3','4','5','6','7','8','9','*','0','#'] %}<span data-dx-key="{{ k }}">{{ k }}</span>{% endfor %}</div>
-            <div class="dx-callrow"><span class="dx-back">&#9003;</span><span class="dx-call" data-dx-call><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1z"/></svg></span><span class="dx-end"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1a1 1 0 01-.56.9 11.5 11.5 0 00-2.66 1.85 1 1 0 01-1.4 0L.29 13.08a1 1 0 010-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 010 1.41l-2.48 2.49a1 1 0 01-1.4 0 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1A15 15 0 0012 9z"/></svg></span></div>
+            <div class="dx-callrow"><span class="dx-back" data-dx-back>&#9003;</span><span class="dx-call" data-dx-call><svg viewBox="0 0 24 24"><path d="M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1z"/></svg></span><span class="dx-end" data-dx-clear><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1a1 1 0 01-.56.9 11.5 11.5 0 00-2.66 1.85 1 1 0 01-1.4 0L.29 13.08a1 1 0 010-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 010 1.41l-2.48 2.49a1 1 0 01-1.4 0 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1A15 15 0 0012 9z"/></svg></span></div>
           </div>
           <div class="dx-call-view">
             <div class="dx-person"><span class="dx-ring"></span><span class="dx-ring two"></span><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></svg></div>
             <strong class="dx-dialed" data-dx-dialed>+1 415 555 0132</strong>
             <span class="dx-timer" data-dx-timer>00:00</span>
-            <div class="dx-ctrls"><span data-dx-ctrl="mute"><i>&#127908;</i>Mute</span><span><i>&#9638;</i>Keypad</span><span><i>&#10074;&#10074;</i>Hold</span><span><i>&#43;</i>Add Call</span><span><i>&#8644;</i>Transfer</span><span class="rec" data-dx-ctrl="rec"><i>&#9673;</i>REC</span></div>
-            <span class="dx-hang"><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1a1 1 0 01-.56.9 11.5 11.5 0 00-2.66 1.85 1 1 0 01-1.4 0L.29 13.08a1 1 0 010-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 010 1.41l-2.48 2.49a1 1 0 01-1.4 0 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1A15 15 0 0012 9z"/></svg></span>
+            <div class="dx-ctrls"><span data-dx-ctrl="mute"><i>&#127908;</i>Mute</span><span data-dx-ctrl="keypad"><i>&#9638;</i>Keypad</span><span data-dx-ctrl="hold"><i>&#10074;&#10074;</i>Hold</span><span data-dx-ctrl="add"><i>&#43;</i>Add Call</span><span data-dx-ctrl="transfer"><i>&#8644;</i>Transfer</span><span class="rec" data-dx-ctrl="rec"><i>&#9673;</i>REC</span></div>
+            <span class="dx-hang" data-dx-hang><svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1a1 1 0 01-.56.9 11.5 11.5 0 00-2.66 1.85 1 1 0 01-1.4 0L.29 13.08a1 1 0 010-1.41C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67a1 1 0 010 1.41l-2.48 2.49a1 1 0 01-1.4 0 11.3 11.3 0 00-2.67-1.85 1 1 0 01-.56-.9v-3.1A15 15 0 0012 9z"/></svg></span>
           </div>
         </aside>
       </div>
       <div class="dx-toast" data-dx-toast><span>&#10003;</span><div><strong>Call saved to Call Logs</strong><small data-dx-toast-text>+1 415 555 0132 &middot; 00:06 &middot; Recorded</small></div></div>
       <div class="dx-cursor" data-dx-cursor><svg viewBox="0 0 24 24"><path d="M4 2l6 18 3-7 7-3z"/></svg></div>
     </div></div>
-    <div class="dx-note">Illustrative interface &middot; Demo data, not live customer records</div>
+    <div class="dx-hint" data-dx-hint>Try it: click the menu, dial a number, press call</div><div class="dx-note">Interactive demo &middot; Example data, not live customer records</div>
   </div>
 </div>

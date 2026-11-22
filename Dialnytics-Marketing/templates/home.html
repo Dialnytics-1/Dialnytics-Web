@@ -14,9 +14,7 @@
   <div class="hm-cta"><a class="button" href="#calculator">Get started {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><a class="tour-link light" href="/product/tour/">{{ icon('play') }} Watch product tour</a></div>
  </div>
  <div class="hm-hero-visual">
-  <figure class="hm-shot"><div class="hm-shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>dialnytics.co.uk</span></div><img src="/static/img/product/dashboard.webp" width="1600" height="692" alt="The Dialnytics dialer: dashboard with today's calls, answer rate and talk time, with the dial pad on the right" fetchpriority="high"></figure>
-  <div class="hm-sms" aria-hidden="true"><div class="hm-sms-head">{{ icon('message') }}<span>New text &middot; +1 (415) 555-0182</span></div><p class="in">Hi! Is the 2-bed apartment still available for a viewing this week?</p><p class="out">Yes, it is. Does Thursday at 4 PM work for you?<small>Delivered</small></p></div>
-  <div class="hm-callchip" aria-hidden="true"><span class="dot"></span><div><strong>On a call &middot; 02:14</strong><small>+44 20 7946 0321 &middot; London</small></div></div>
+  {% include 'live-preview.html' %}
   <p class="hm-shot-note">Real dialer screen. Sample data and example numbers.</p>
  </div>
 </div>
@@ -149,4 +147,4 @@
 {# 13. Final CTA #}
 <section class="section"><div class="container"><div class="closing-cta"><div><span class="eyebrow light">READY WHEN YOU ARE</span><h2>Your next customer is<br>one call away.</h2><p>Pick a plan in two minutes, or see the dialer first.</p></div><div class="cta-stack"><a class="button white" href="#calculator">Get started {{ icon('arrow') }}</a><a class="button outline-light" href="/book-demo/">Book a demo</a><a class="tour-link light" href="/product/tour/">{{ icon('play') }} Watch product tour</a><small>From ${{ pricing.from }}/user &middot; Taxes included &middot; $0 setup</small></div></div></div></section>
 {% endblock %}
-{% block scripts %}<script type="application/json" id="pricing-data">{{ catalog|tojson }}</script><script type="module" src="/static/js/pricing.js?v=3"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/hero-dialer.js?v=2" defer></script><script type="application/json" id="pricing-data">{{ catalog|tojson }}</script><script type="module" src="/static/js/pricing.js?v=3"></script>{% endblock %}

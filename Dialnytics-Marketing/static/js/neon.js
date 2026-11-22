@@ -9,7 +9,7 @@
   [aura,ring,cur].forEach(function(e){e.setAttribute('aria-hidden','true');document.body.appendChild(e)});
   var cards=document.querySelectorAll('.hm-feat,.hm-num-card,.hm-steps li,.hm-tile,.hm-stats-row>div,.hm-industries a,.hm-post,.hm-trust article,.hm-mission-grid>div,.price-teaser,.plan-card,.feature-card,.collection-card,.country-card,.calc2');
   cards.forEach(function(c){c.classList.add('nx-sp')});
-  var hero=document.querySelector('.hm-hero'),shot=document.querySelector('.hm-shot');
+  var hero=document.querySelector('.hm-hero'),shot=document.querySelector('.hm-hero .dx-frame');
   var mx=innerWidth/2,my=innerHeight/2,rx=mx,ry=my,ax=mx,ay=my,on=false;
   addEventListener('mousemove',function(e){
     mx=e.clientX;my=e.clientY;
@@ -17,7 +17,7 @@
     cur.style.transform='translate('+mx+'px,'+my+'px)';
     var el=e.target;
     root.classList.toggle('nx-txt',!!(el.closest&&el.closest('input,textarea,select')));
-    ring.classList.toggle('big',!!(el.closest&&el.closest('a,button,summary,label')));
+    ring.classList.toggle('big',!!(el.closest&&el.closest('a,button,summary,label,[role=button]')));
     var c=el.closest&&el.closest('.nx-sp');
     if(c){var b=c.getBoundingClientRect();c.style.setProperty('--mx',(mx-b.left)+'px');c.style.setProperty('--my',(my-b.top)+'px')}
     if(hero){hero.style.setProperty('--px',(mx/innerWidth-.5).toFixed(3));hero.style.setProperty('--py',(my/innerHeight-.5).toFixed(3))}
