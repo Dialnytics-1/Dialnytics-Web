@@ -22,6 +22,7 @@
 </div>
 <div class="container hm-chips"><span>Plans for</span>{% for slug,label in [('usa','USA'),('canada','Canada'),('uk','UK'),('australia','Australia'),('japan','Japan'),('global','Global'),('uk-to-europe','UK to Europe')] %}<a href="/numbers/{{ slug }}/">{{ label }}</a>{% endfor %}</div></section>
 
+<div class="nx-marquee" aria-label="Markets"><div>{% for r in range(2) %}{% for slug,label in [('usa','USA'),('canada','Canada'),('uk','United Kingdom'),('australia','Australia'),('japan','Japan'),('global','Global'),('uk-to-europe','UK to Europe')] %}<a href="/numbers/{{ slug }}/" {% if r %}tabindex="-1" aria-hidden="true"{% endif %}><b>&#9670;</b>{{ label }}</a>{% endfor %}{% endfor %}</div></div>
 {# 3. Stats strip #}
 <section class="hm-stats" aria-label="Dialnytics at a glance"><div class="container hm-stats-row">
  <div><strong>$0</strong><span>hardware and setup</span></div>
